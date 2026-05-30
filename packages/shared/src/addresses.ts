@@ -11,6 +11,8 @@ export const STORY_AENEID_ADDRESSES = {
   // CDR access-condition contracts (Option A — reuse, zero new Solidity)
   ownerWriteCondition: "0x4C9bFC96d7092b590D497A191826C3dA2277c34B",
   licenseReadCondition: "0xC0640AD4CF2CaA9914C8e5C44234359a9102f7a3",
+  // Public SPG NFT collection for minting IP-backing NFTs on Aeneid (Story docs, register-ip-asset).
+  spgNftDefault: "0xc32A8a0FF3beDDDa58393d022aF433e78739FAbc",
 } as const satisfies Record<string, Hex>;
 
 /** Arbitrum One (chain 42161) — whitelisted spot tokens for the demo. */

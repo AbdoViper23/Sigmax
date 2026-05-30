@@ -12,17 +12,13 @@ contract CopyVaultFactory {
     event VaultCreated(address indexed owner, address vault);
 
     /// @notice Create (or return) the caller's CopyVault, fully configured.
-    function createVault(
-        address executor,
-        address[] calldata tokens,
-        address[] calldata routers,
-        uint256 cap
-    ) external returns (address vault) {
+    function createVault(address executor, address[] calldata tokens, address[] calldata routers, uint256 cap)
+        external
+        returns (address vault)
+    {
         require(vaultOf[msg.sender] == address(0), "VAULT_EXISTS");
         vault = address(
-            new CopyVault{salt: bytes32(uint256(uint160(msg.sender)))}(
-                msg.sender, executor, tokens, routers, cap
-            )
+            new CopyVault{salt: bytes32(uint256(uint160(msg.sender)))}(msg.sender, executor, tokens, routers, cap)
         );
         vaultOf[msg.sender] = vault;
         emit VaultCreated(msg.sender, vault);

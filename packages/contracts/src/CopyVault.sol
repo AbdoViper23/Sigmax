@@ -48,13 +48,7 @@ contract CopyVault is ReentrancyGuard {
         _;
     }
 
-    constructor(
-        address _owner,
-        address executor,
-        address[] memory tokens,
-        address[] memory routers,
-        uint256 cap
-    ) {
+    constructor(address _owner, address executor, address[] memory tokens, address[] memory routers, uint256 cap) {
         owner = _owner;
         if (executor != address(0)) {
             isExecutor[executor] = true;
