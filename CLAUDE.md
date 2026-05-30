@@ -116,6 +116,14 @@ business/
 
 ### External references (official docs — fetch on demand)
 
+- **`cdr` skill (source of truth for `@piplabs/cdr-sdk`):** invoke the **`cdr` skill BEFORE writing
+  or reviewing ANY code that touches `@piplabs/cdr-sdk`** (allocating vaults, `uploadCDR`/`accessCDR`,
+  conditions, IPFS upload). It pins the working facts: SDK **v0.2.1**; `network` is **`"testnet"`**
+  for Aeneid (NEVER `"aeneid"`); `apiUrl` is required (Aeneid `http://172.192.41.96:1317`); call
+  `await initWasm()` before encrypt/decrypt; inline payloads ≤ ~1024 bytes (else `uploadFile`); the
+  two deployed condition contracts (`OwnerWriteCondition` `0x4C9b…c34B`, `LicenseReadCondition`
+  `0xC064…f7a3`, `LicenseToken` `0xFe38…C6bC`); EOA-as-condition needs `skipConditionValidation:true`
+  + the low-level `allocate`→`encryptDataKey`→`write` path. (`packages/cdr` wraps all of this.)
 - **Story Protocol / CDR docs index:** https://docs.story.foundation/llms.txt
   When a task touches Story, CDR, IP Assets, PIL / License, or Royalty behavior, open this index
   first and fetch the specific page's `.md` before writing code — do NOT rely on memory for the
@@ -173,9 +181,10 @@ pnpm -r test
 
 ## 7. Status / verify-first notes
 
-- The CDR SDK version is **not yet confirmed** — docs say `@piplabs/cdr-sdk@0.2.1`, GitHub tags
-  show `0.1.1`. Before writing any CDR code, run `npm view @piplabs/cdr-sdk version` and check the
-  installed package's TypeScript types. (Tracked in `94-risks-and-unknowns.md`.)
+- **CDR SDK confirmed:** `@piplabs/cdr-sdk@0.2.1` (+ `@piplabs/cdr-contracts@0.2.1`) is installed and
+  verified against the `cdr` skill. Key fact that bit us once: `Network = "mainnet" | "testnet"`, so
+  Aeneid is **`"testnet"`** — passing `"aeneid"` (or hiding it with `as never`) breaks live calls.
+  For any CDR change, invoke the **`cdr` skill** first (see §4).
 - Aeneid testnet has **no real spot liquidity** — swaps must be demoed against a **forked**
   Arbitrum/Base (Anvil `--fork-url`). (Tracked in `94-risks-and-unknowns.md`.)
 - When a doc and reality disagree, reality wins — update the doc and note it in
