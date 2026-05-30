@@ -23,7 +23,7 @@ export interface RealCdrConfig {
   privateKey: Hex; // CDR access key — funded Aeneid wallet; holds the operator license
   rpcUrl?: string; // Story RPC (default Aeneid public)
   apiUrl: string; // Story-API REST base (DKG partials endpoint)
-  network?: string; // cdr-contracts Network id (default "aeneid")
+  network?: "mainnet" | "testnet"; // cdr-contracts Network — Aeneid IS "testnet" (NOT "aeneid")
   ipId: Hex; // strategy IP Asset (ERC-6551 address)
   leader: Hex; // owner allowed to write (OwnerWriteCondition)
   operatorLicenseTokenId: bigint; // license token id the agent holds for ipId
@@ -49,7 +49,7 @@ export class RealCdr implements CdrPort {
     const walletClient = createWalletClient({ account, chain: storyChain, transport });
     this.client = new CDRClient({
       // cdr-contracts Network id; "aeneid" expected — surfaced on first live run.
-      network: (cfg.network ?? "aeneid") as never,
+      network: cfg.network ?? "testnet",
       publicClient,
       walletClient,
       apiUrl: cfg.apiUrl,

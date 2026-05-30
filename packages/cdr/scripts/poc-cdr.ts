@@ -32,7 +32,7 @@ async function main() {
       privateKey: process.env.CDR_KEY as `0x${string}`,
       rpcUrl: process.env.STORY_RPC_URL,
       apiUrl: process.env.STORY_API_URL!,
-      network: process.env.CDR_NETWORK,
+      network: process.env.CDR_NETWORK as "mainnet" | "testnet" | undefined,
       ipId: (process.env.STRATEGY_IP_ID as `0x${string}`),
       leader: (process.env.LEADER_ADDRESS ?? process.env.STRATEGY_IP_ID) as `0x${string}`,
       operatorLicenseTokenId: BigInt(process.env.OPERATOR_LICENSE_TOKEN_ID!),
