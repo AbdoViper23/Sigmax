@@ -1,0 +1,16 @@
+node_modules/
+.env
+.env.local
+dist/
+out/
+cache/
+broadcast/
+.turbo/
+coverage/
+*.log
+.DS_Store
+lib/
+docs/business
+
+# scraped Story docs HTML dump — local reference only, do not upload
+docs/story-docs.md

@@ -1,0 +1,21 @@
+{
+  "name": "sigmax",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Sigmax — confidential spot-only copy-trading (Story CDR + Arbitrum)",
+  "packageManager": "pnpm@11.0.8",
+  "scripts": {
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
