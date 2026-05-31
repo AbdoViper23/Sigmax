@@ -4,6 +4,8 @@ import { cn } from "@/lib/utils";
 
 export interface StrategyHeaderProps {
   name: string;
+  username?: string;
+  bio?: string;
   verifiedReturnPct: number | null;
   winRatePct: number | null;
   maxDrawdownPct: number | null;
@@ -39,6 +41,8 @@ function Stat({
 
 export function StrategyHeader({
   name,
+  username,
+  bio,
   verifiedReturnPct,
   winRatePct,
   maxDrawdownPct,
@@ -49,9 +53,13 @@ export function StrategyHeader({
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight">{name}</h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-3xl font-semibold tracking-tight">{name}</h1>
+            {username && <span className="text-sm text-muted-foreground">@{username}</span>}
+          </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            Verifiable track record. Every signal is committed on-chain before its outcome is known.
+            {bio ??
+              "Verifiable track record. Every signal is committed on-chain before its outcome is known."}
           </p>
         </div>
         <span className="inline-flex items-center gap-1.5 rounded-full border border-success/30 bg-success/10 px-2.5 py-1 text-xs font-medium text-success">
@@ -82,6 +90,12 @@ export function StrategyHeader({
       <Card>
         <CardContent className="pt-6">
           <h2 className="mb-3 text-sm font-medium">Published signals (on-chain proof)</h2>
+          {publishedSignals.length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              No published signals yet. New signals are committed on-chain before their outcome is
+              known.
+            </p>
+          )}
           <ul className="divide-y divide-border text-sm">
             {publishedSignals.map((s) => (
               <li key={s.signalId} className="flex items-center justify-between py-2">

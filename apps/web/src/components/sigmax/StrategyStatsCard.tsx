@@ -49,8 +49,8 @@ export function StrategyStatsCard({
         {/* Revenue is split to the leader's wallet automatically on every subscribe/renew
             (SubscriptionRegistry.subscribe) — there is nothing to claim. */}
         <p className="text-xs text-muted-foreground">
-          Subscription revenue is paid to your wallet automatically on every subscribe & renewal — no
-          claim needed.
+          Subscription revenue is paid to your wallet automatically on every subscribe & renewal —
+          no claim needed.
         </p>
       </CardContent>
     </Card>

@@ -40,7 +40,7 @@ function Index() {
         <div className="mt-8 flex flex-wrap gap-3">
           <Button asChild size="lg">
             <Link to="/leaderboard">
-              Browse leaderboard <ArrowRight className="ml-1.5 h-4 w-4" />
+              Browse leaders <ArrowRight className="ml-1.5 h-4 w-4" />
             </Link>
           </Button>
           <Button asChild size="lg" variant="outline">

@@ -50,9 +50,14 @@ export function useLeaderPlan() {
   const active = Boolean(plan.data?.[4]);
   const registered = Boolean(leader && leader !== zeroAddress);
 
-  const createPlan = async (v: { name: string; monthlyPriceWip: string }): Promise<void> => {
+  const createPlan = async (v: {
+    username: string;
+    displayName: string;
+    monthlyPriceWip: string;
+  }): Promise<void> => {
     if (!pub || !strategyId || !env.registryAddress) throw new Error("registry not configured");
-    // `v.name` is cosmetic (UI only) — SubscriptionRegistry stores no strategy name on-chain.
+    // username/displayName are cosmetic (off-chain profile, persisted by the caller via
+    // lib/leaderProfiles.ts) — SubscriptionRegistry stores no name on-chain, only the price.
     const price = parseUnits(v.monthlyPriceWip, WIP_DECIMALS);
     const hash = await writeContractAsync({
       address: env.registryAddress,
@@ -108,8 +113,7 @@ export function useStrategyStats() {
         if (subscriber) set.add(subscriber.toLowerCase());
         if (paid) grossPaid += paid;
       }
-      const leaderShare =
-        (grossPaid * BigInt(10_000 - env.platformFeeBps)) / 10_000n; // matches on-chain split
+      const leaderShare = (grossPaid * BigInt(10_000 - env.platformFeeBps)) / 10_000n; // matches on-chain split
       return { subscribers: set.size, totalEarnedWip: formatUnits(leaderShare, WIP_DECIMALS) };
     },
   });

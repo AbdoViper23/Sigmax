@@ -7,8 +7,8 @@ import { ConnectButton } from "@rainbow-me/rainbowkit";
  */
 const links = [
   { to: "/", label: "Home" },
-  { to: "/leaderboard", label: "Leaderboard" },
-  { to: "/leader", label: "Leader" },
+  { to: "/leaderboard", label: "Leaders" },
+  { to: "/leader", label: "Become a leader" },
   { to: "/follower", label: "Follower" },
 ] as const;
 

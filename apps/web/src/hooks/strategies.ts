@@ -2,9 +2,7 @@ import { usePublicClient } from "wagmi";
 import { useQuery } from "@tanstack/react-query";
 import { formatUnits, type Address } from "viem";
 import { chainConfigReady, env } from "@/lib/env";
-import { useStrategyStats } from "@/hooks/leader";
 import { COPY_VAULT_ABI, COPY_VAULT_FACTORY_ABI } from "@/lib/abis";
-import type { LeaderboardRow } from "@/components/sigmax/LeaderboardTable";
 
 const ARB = env.liquidityChainId;
 const USDC_DECIMALS = 6;
@@ -103,26 +101,6 @@ export function useStrategyPerformance() {
   };
 }
 
-/**
- * Leaderboard rows. The MVP runs a single configured strategy (there is no on-chain registry of all
- * strategies), so we surface exactly that one with its live subscriber count + verified performance
- * derived from real trades. No configured strategy → empty (no fabricated rows).
- */
-export function useLeaderboard(): { rows: LeaderboardRow[]; loading: boolean } {
-  const stats = useStrategyStats(); // run unconditionally; self-disables when unconfigured
-  const perf = useStrategyPerformance();
-
-  if (!chainConfigReady || !env.strategyIpId) {
-    return { rows: [], loading: false };
-  }
-
-  const row: LeaderboardRow = {
-    id: env.strategyIpId,
-    name: env.strategyName,
-    verifiedReturnPct: perf.verifiedReturnPct,
-    winRatePct: perf.winRatePct,
-    maxDrawdownPct: perf.maxDrawdownPct,
-    subscribers: stats.subscribers,
-  };
-  return { rows: [row], loading: stats.loading || perf.loading };
-}
+// The leaderboard now lists ALL leaders (mock + the configured live strategy) via `useLeaders()`
+// (hooks/leaders.ts) — it is the marketplace source of truth. `useStrategyPerformance` above stays
+// the per-strategy track-record primitive consumed by useLeaders, the leader page, and the detail page.

@@ -50,7 +50,8 @@ export function PositionsTable({ positions, loading }: PositionsTableProps) {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm [&_td]:whitespace-nowrap [&_td]:px-4 [&_td:first-child]:pl-0 [&_td:last-child]:pr-0 [&_th]:px-4 [&_th:first-child]:pl-0 [&_th:last-child]:pr-0">
+              {/* px-4 separates adjacent columns; whitespace-nowrap stops cells like PnL/Opened touching */}
               <thead>
                 <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
                   <th className="py-2 font-medium">Pair</th>
