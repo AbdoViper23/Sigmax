@@ -29,6 +29,9 @@ export const AgentConfigSchema = z.object({
   pollMs: z.coerce.number().int().positive().default(10_000), // TP/SL poll interval
   defaultSlippageBps: z.coerce.number().int().min(1).max(10_000).default(100),
   statePath: z.string().optional(), // optional JSON persist path for NON-secret position metadata
+  // HTTP publish endpoint (leader UI POSTs signals here; CDR encryption is server-only)
+  httpPort: z.coerce.number().int().positive().default(8787), // HTTP_PORT
+  webOrigin: z.string().default("http://localhost:5173"), // WEB_ORIGIN — CORS allow-origin for the web app
 });
 
 export type AgentConfig = z.infer<typeof AgentConfigSchema> & {
@@ -57,6 +60,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AgentConfig {
     pollMs: env.POLL_MS,
     defaultSlippageBps: env.DEFAULT_SLIPPAGE_BPS,
     statePath: env.STATE_PATH,
+    httpPort: env.HTTP_PORT,
+    webOrigin: env.WEB_ORIGIN,
   });
   return parsed as AgentConfig;
 }

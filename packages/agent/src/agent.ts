@@ -1,4 +1,5 @@
 import type { Hex } from "viem";
+import type { Signal } from "@sigmax/shared";
 import { RealCdr } from "@sigmax/cdr";
 import type { AgentConfig } from "./config.js";
 import { ZeroExExecutor } from "./executor.js";
@@ -68,6 +69,14 @@ export class Agent {
     const { restored, dropped } = await this.store.reconcile(this.cdr);
     this.logger.info("reconciled", { restored: String(restored), dropped: String(dropped) });
     this.monitor.start();
+  }
+
+  /**
+   * Encrypt + publish a signal to CDR (server-only; called by the HTTP publish endpoint). The
+   * plaintext signal stays in memory and is never logged. Returns the on-chain CDR vault uuid.
+   */
+  async publishSignal(signal: Signal): Promise<{ uuid: number }> {
+    return this.cdr.publishSignal(signal);
   }
 
   /** Process one signal vault (the demo trigger; production swaps this for an event watcher). */

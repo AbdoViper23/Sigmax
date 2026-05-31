@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { LeaderboardTable } from "@/components/sigmax/LeaderboardTable";
-import { mockLeaderboard } from "@/lib/mock";
+import { useLeaderboard } from "@/hooks/strategies";
 
 export const Route = createFileRoute("/leaderboard")({
   head: () => ({
@@ -18,6 +18,7 @@ export const Route = createFileRoute("/leaderboard")({
 });
 
 function LeaderboardPage() {
+  const { rows, loading } = useLeaderboard();
   return (
     <main className="mx-auto max-w-6xl px-4 py-10">
       <div className="mb-6">
@@ -27,7 +28,7 @@ function LeaderboardPage() {
           "—".
         </p>
       </div>
-      <LeaderboardTable rows={mockLeaderboard} loading={false} />
+      <LeaderboardTable rows={rows} loading={loading} />
     </main>
   );
 }

@@ -1,15 +1,10 @@
 import { Link } from "@tanstack/react-router";
-import { ConnectButton } from "./ConnectButton";
-import { NetworkBadge, type ChainId } from "./NetworkBadge";
+import { ConnectButton } from "@rainbow-me/rainbowkit";
 
 /**
- * Top nav. Wallet state + chain are placeholders driven by props (mocked in pages).
+ * Top nav. Wallet connection + chain switching are handled by RainbowKit's ConnectButton
+ * (reads wagmi state). No props — it's global chrome rendered once in __root.
  */
-export interface NavProps {
-  address?: string;
-  chain?: ChainId;
-}
-
 const links = [
   { to: "/", label: "Home" },
   { to: "/leaderboard", label: "Leaderboard" },
@@ -17,7 +12,7 @@ const links = [
   { to: "/follower", label: "Follower" },
 ] as const;
 
-export function Nav({ address, chain = "story" }: NavProps) {
+export function Nav() {
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-background/80 backdrop-blur">
       <div className="mx-auto flex h-14 max-w-6xl items-center gap-6 px-4">
@@ -41,8 +36,7 @@ export function Nav({ address, chain = "story" }: NavProps) {
           ))}
         </nav>
         <div className="ml-auto flex items-center gap-2">
-          {address && <NetworkBadge chain={chain} />}
-          <ConnectButton address={address} chainLabel={undefined} />
+          <ConnectButton showBalance={false} accountStatus="address" chainStatus="icon" />
         </div>
       </div>
     </header>
