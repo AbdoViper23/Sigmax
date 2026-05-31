@@ -6,16 +6,11 @@ import { RegisterStrategyCard } from "@/components/sigmax/RegisterStrategyCard";
 import { PublishSignalForm } from "@/components/sigmax/PublishSignalForm";
 import { StrategyStatsCard } from "@/components/sigmax/StrategyStatsCard";
 import { NetworkSwitchPrompt } from "@/components/sigmax/NetworkSwitchPrompt";
-import { chainConfigReady, env } from "@/lib/env";
+import { chainConfigReady, env, publishableTokens } from "@/lib/env";
 import { useNetwork } from "@/hooks/useNetwork";
 import { useLeaderPlan, usePublishSignal, useStrategyStats } from "@/hooks/leader";
-import {
-  mockStrategy,
-  mockStrategyStats,
-  mockTokenOptions,
-  mockLastPublished,
-  mockTx,
-} from "@/lib/mock";
+import { useStrategyPerformance } from "@/hooks/strategies";
+import { addPublishedSignal, getPublishedSignals } from "@/lib/publishedSignals";
 
 export const Route = createFileRoute("/leader")({
   head: () => ({
@@ -23,7 +18,7 @@ export const Route = createFileRoute("/leader")({
       { title: "Leader dashboard — Sigmax" },
       {
         name: "description",
-        content: "Register a strategy, publish encrypted signals, claim revenue.",
+        content: "Register a strategy and publish encrypted signals on Story Aeneid.",
       },
     ],
   }),
@@ -42,7 +37,8 @@ function Shell({ children }: { children: React.ReactNode }) {
       <div>
         <h1 className="text-3xl font-semibold tracking-tight">Leader dashboard</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Register once. Publish encrypted signals on Story Aeneid. Claim revenue.
+          Register once. Publish encrypted signals on Story Aeneid. Revenue is paid to your wallet
+          automatically.
         </p>
       </div>
       {children}
@@ -56,12 +52,19 @@ function LeaderLive() {
   const net = useNetwork();
   const plan = useLeaderPlan();
   const stats = useStrategyStats();
+  const perf = useStrategyPerformance();
   const { publish } = usePublishSignal();
-  const [claiming, setClaiming] = useState(false);
   const [publishing, setPublishing] = useState(false);
-  const [lastPublished, setLastPublished] = useState<
-    { signalId: string; txUrl: string; at: string } | undefined
-  >();
+  const [signals, setSignals] = useState(() => getPublishedSignals(env.strategyIpId));
+
+  const lastPublished = signals[0]
+    ? {
+        signalId:
+          signals[0].uuid !== undefined ? `CDR vault #${signals[0].uuid}` : signals[0].signalId,
+        txUrl: env.explorers.story,
+        at: signals[0].at,
+      }
+    : undefined;
 
   return (
     <Shell>
@@ -81,22 +84,12 @@ function LeaderLive() {
           />
         </NetworkSwitchPrompt>
 
-        {/* Subscribers is live (event-derived); revenue/return are off-chain (no indexer) → mock. */}
+        {/* All real: subscribers + total earned from Subscribed events; return from on-chain trades. */}
         <StrategyStatsCard
           subscribers={stats.subscribers}
-          claimableWip={mockStrategyStats.claimableWip}
-          signalsPublished={mockStrategyStats.signalsPublished}
-          verifiedReturnPct={mockStrategyStats.verifiedReturnPct}
-          claiming={claiming}
-          onClaim={async () => {
-            setClaiming(true);
-            try {
-              await mockTx();
-              toast.info("Revenue claim runs through the Story royalty module (coming soon).");
-            } finally {
-              setClaiming(false);
-            }
-          }}
+          signalsPublished={signals.length}
+          verifiedReturnPct={perf.verifiedReturnPct}
+          totalEarnedWip={stats.totalEarnedWip}
         />
       </div>
 
@@ -106,18 +99,21 @@ function LeaderLive() {
         onSwitch={() => net.switchTo("story")}
       >
         <PublishSignalForm
-          tokenOptions={mockTokenOptions}
+          tokenOptions={publishableTokens}
           publishing={publishing}
           lastPublished={lastPublished}
           onPublish={async (v) => {
             setPublishing(true);
             try {
               const r = await publish(v);
-              setLastPublished({
-                signalId: r.uuid !== undefined ? `CDR vault #${r.uuid}` : r.signalId,
-                txUrl: env.explorers.story,
-                at: r.at,
-              });
+              setSignals(
+                addPublishedSignal(env.strategyIpId, {
+                  signalId: r.signalId,
+                  uuid: r.uuid,
+                  action: v.action,
+                  at: r.at,
+                }),
+              );
               toast.success(`${v.action} signal published`);
             } finally {
               setPublishing(false);
@@ -129,65 +125,33 @@ function LeaderLive() {
   );
 }
 
-// ───────────────────────── mock (no wallet / no env) ─────────────────────────
+// ───────────── disconnected / unconfigured (connect-wallet prompt state) ─────────────
 
 function LeaderMock() {
-  const [registered, setRegistered] = useState(mockStrategy.registered);
-  const [ipId, setIpId] = useState<string | undefined>(mockStrategy.ipId);
-  const [lastPublished, setLastPublished] = useState(mockLastPublished);
-  const [claiming, setClaiming] = useState(false);
-
   const currentChain = "story" as const;
+  const noop = async () => {};
 
   return (
     <Shell>
+      <div className="rounded-lg border border-dashed bg-muted/30 p-4 text-sm text-muted-foreground">
+        Connect your wallet on Story Aeneid to register your strategy and publish signals. Live
+        stats appear once connected.
+      </div>
       <div className="grid gap-6 lg:grid-cols-2">
-        <NetworkSwitchPrompt requiredChain="story" current={currentChain} onSwitch={mockTx}>
-          <RegisterStrategyCard
-            registered={registered}
-            ipId={ipId}
-            onRegister={async (v) => {
-              await mockTx();
-              setRegistered(true);
-              setIpId("0x" + Math.random().toString(16).slice(2, 42).padEnd(40, "a"));
-              toast.success(`Strategy "${v.name}" registered`);
-            }}
-          />
+        <NetworkSwitchPrompt requiredChain="story" current={currentChain} onSwitch={noop}>
+          <RegisterStrategyCard registered={false} ipId={undefined} onRegister={noop} />
         </NetworkSwitchPrompt>
 
         <StrategyStatsCard
-          subscribers={mockStrategyStats.subscribers}
-          claimableWip={mockStrategyStats.claimableWip}
-          signalsPublished={mockStrategyStats.signalsPublished}
-          verifiedReturnPct={mockStrategyStats.verifiedReturnPct}
-          claiming={claiming}
-          onClaim={async () => {
-            setClaiming(true);
-            try {
-              await mockTx();
-              toast.success(`Claimed ${mockStrategyStats.claimableWip} $WIP`);
-            } finally {
-              setClaiming(false);
-            }
-          }}
+          subscribers={0}
+          signalsPublished={0}
+          verifiedReturnPct={null}
+          totalEarnedWip="0"
         />
       </div>
 
-      <NetworkSwitchPrompt requiredChain="story" current={currentChain} onSwitch={mockTx}>
-        <PublishSignalForm
-          tokenOptions={mockTokenOptions}
-          publishing={false}
-          lastPublished={lastPublished}
-          onPublish={async (v) => {
-            await mockTx();
-            setLastPublished({
-              signalId: "0x" + Math.random().toString(16).slice(2, 10) + "...",
-              txUrl: "https://aeneid.storyscan.io/tx/0xnew",
-              at: new Date().toISOString(),
-            });
-            toast.success(`${v.action} signal published`);
-          }}
-        />
+      <NetworkSwitchPrompt requiredChain="story" current={currentChain} onSwitch={noop}>
+        <PublishSignalForm tokenOptions={publishableTokens} publishing={false} onPublish={noop} />
       </NetworkSwitchPrompt>
     </Shell>
   );

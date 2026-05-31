@@ -75,18 +75,24 @@ export function useLeaderPlan() {
 }
 
 /**
- * Subscriber count for the configured strategy, derived from `Subscribed` events (there is no
- * on-chain counter). Unique subscribers only. Returns 0 while loading / when not configured.
+ * Strategy stats derived from `Subscribed` events on Story (there is no on-chain counter):
+ *  - `subscribers`: unique subscriber addresses.
+ *  - `totalEarnedWip`: the leader's cumulative take = sum(paid) × (1 − platformFeeBps) — the exact
+ *    split the registry transfers to the leader on every subscribe/renew (no claim step; see
+ *    SubscriptionRegistry.subscribe). This is real, not an indexer estimate.
+ * Returns zeros while loading / when not configured.
  */
 export function useStrategyStats() {
   const pub = usePublicClient({ chainId: STORY });
   const strategyId = env.strategyIpId;
 
   const q = useQuery({
-    queryKey: ["strategy-subscribers", strategyId],
+    queryKey: ["strategy-stats", strategyId, env.platformFeeBps],
     enabled: Boolean(pub && strategyId && env.registryAddress),
-    queryFn: async (): Promise<number> => {
-      if (!pub || !strategyId || !env.registryAddress) return 0;
+    queryFn: async (): Promise<{ subscribers: number; totalEarnedWip: string }> => {
+      if (!pub || !strategyId || !env.registryAddress) {
+        return { subscribers: 0, totalEarnedWip: "0" };
+      }
       const logs = await pub.getContractEvents({
         address: env.registryAddress,
         abi: SUBSCRIPTION_REGISTRY_ABI,
@@ -96,15 +102,23 @@ export function useStrategyStats() {
         toBlock: "latest",
       });
       const set = new Set<string>();
+      let grossPaid = 0n;
       for (const l of logs) {
-        const sub = (l.args as { subscriber?: string }).subscriber;
-        if (sub) set.add(sub.toLowerCase());
+        const { subscriber, paid } = l.args as { subscriber?: string; paid?: bigint };
+        if (subscriber) set.add(subscriber.toLowerCase());
+        if (paid) grossPaid += paid;
       }
-      return set.size;
+      const leaderShare =
+        (grossPaid * BigInt(10_000 - env.platformFeeBps)) / 10_000n; // matches on-chain split
+      return { subscribers: set.size, totalEarnedWip: formatUnits(leaderShare, WIP_DECIMALS) };
     },
   });
 
-  return { subscribers: q.data ?? 0, loading: q.isLoading };
+  return {
+    subscribers: q.data?.subscribers ?? 0,
+    totalEarnedWip: q.data?.totalEarnedWip ?? "0",
+    loading: q.isLoading,
+  };
 }
 
 /**

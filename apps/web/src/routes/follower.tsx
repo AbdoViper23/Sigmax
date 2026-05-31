@@ -41,7 +41,7 @@ export const Route = createFileRoute("/follower")({
   component: FollowerPage,
 });
 
-const STRATEGY_NAME = mockStrategy.name; // cosmetic only; not stored on-chain
+const STRATEGY_NAME = env.strategyName; // cosmetic display name (config, not on-chain)
 
 function FollowerPage() {
   const { isConnected } = useAccount();
@@ -224,7 +224,7 @@ function FollowerMock() {
           <div className={current === 0 ? "" : "pointer-events-none opacity-50"}>
             <NetworkSwitchPrompt requiredChain="story" current={currentChain} onSwitch={mockTx}>
               <SubscribeCard
-                strategyName={mockStrategy.name}
+                strategyName={STRATEGY_NAME}
                 monthlyPriceWip={mockStrategy.monthlyPriceWip}
                 status={subStatus}
                 activeUntil={activeUntil}

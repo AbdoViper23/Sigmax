@@ -1,14 +1,12 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { TxButton } from "./TxButton";
 import { cn } from "@/lib/utils";
 
 export interface StrategyStatsCardProps {
   subscribers: number;
-  claimableWip: string;
   signalsPublished: number;
   verifiedReturnPct: number | null;
-  onClaim: () => Promise<void>;
-  claiming: boolean;
+  /** Cumulative leader take in $WIP — already transferred to the leader on each subscribe (no claim). */
+  totalEarnedWip: string;
 }
 
 function Stat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
@@ -24,10 +22,9 @@ function Stat({ label, value, accent }: { label: string; value: string; accent?:
 
 export function StrategyStatsCard({
   subscribers,
-  claimableWip,
   signalsPublished,
   verifiedReturnPct,
-  onClaim,
+  totalEarnedWip,
 }: StrategyStatsCardProps) {
   return (
     <Card>
@@ -47,9 +44,14 @@ export function StrategyStatsCard({
             }
             accent={verifiedReturnPct !== null && verifiedReturnPct >= 0}
           />
-          <Stat label="Claimable" value={`${claimableWip} WIP`} />
+          <Stat label="Total earned" value={`${totalEarnedWip} WIP`} accent />
         </div>
-        <TxButton label="Claim revenue" pendingLabel="Claiming…" onClick={onClaim} />
+        {/* Revenue is split to the leader's wallet automatically on every subscribe/renew
+            (SubscriptionRegistry.subscribe) — there is nothing to claim. */}
+        <p className="text-xs text-muted-foreground">
+          Subscription revenue is paid to your wallet automatically on every subscribe & renewal — no
+          claim needed.
+        </p>
       </CardContent>
     </Card>
   );

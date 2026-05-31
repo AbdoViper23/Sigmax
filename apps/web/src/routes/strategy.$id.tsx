@@ -1,4 +1,4 @@
-import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import type { Hex } from "viem";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,8 @@ import { chainConfigReady, env } from "@/lib/env";
 import { useNetwork } from "@/hooks/useNetwork";
 import { useSubscription } from "@/hooks/follower";
 import { useStrategyStats } from "@/hooks/leader";
-import { mockLeaderboard, mockPublishedSignals, mockStrategy } from "@/lib/mock";
+import { useStrategyPerformance } from "@/hooks/strategies";
+import { getPublishedSignals } from "@/lib/publishedSignals";
 
 export const Route = createFileRoute("/strategy/$id")({
   head: ({ params }) => ({
@@ -30,7 +31,7 @@ function StrategyPage() {
     chainConfigReady &&
     Boolean(env.strategyIpId) &&
     id.toLowerCase() === env.strategyIpId!.toLowerCase();
-  return isConfigured ? <StrategyLive id={env.strategyIpId as Hex} /> : <StrategyMock id={id} />;
+  return isConfigured ? <StrategyLive id={env.strategyIpId as Hex} /> : <StrategyNotFound />;
 }
 
 // ───────────────────────── live (real web3) ─────────────────────────
@@ -39,17 +40,25 @@ function StrategyLive({ id }: { id: Hex }) {
   const net = useNetwork();
   const sub = useSubscription(id);
   const stats = useStrategyStats();
+  const perf = useStrategyPerformance();
+
+  // Real publish history recorded by this browser (non-secret metadata only — no TP/SL).
+  const publishedSignals = getPublishedSignals(id).map((s) => ({
+    signalId: s.uuid !== undefined ? `CDR vault #${s.uuid}` : s.signalId,
+    at: s.at,
+    txUrl: env.explorers.story,
+  }));
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-10">
-      {/* Subscribers is live (event-derived); performance is off-chain (no indexer) → "—". */}
+      {/* Subscribers + performance are all on-chain derived; drawdown shows "—" (no equity series). */}
       <StrategyHeader
-        name={mockStrategy.name}
-        verifiedReturnPct={null}
-        winRatePct={null}
-        maxDrawdownPct={null}
+        name={env.strategyName}
+        verifiedReturnPct={perf.verifiedReturnPct}
+        winRatePct={perf.winRatePct}
+        maxDrawdownPct={perf.maxDrawdownPct}
         subscribers={stats.subscribers}
-        publishedSignals={mockPublishedSignals}
+        publishedSignals={publishedSignals}
       />
       <div className="mt-8 max-w-md">
         <NetworkSwitchPrompt
@@ -58,7 +67,7 @@ function StrategyLive({ id }: { id: Hex }) {
           onSwitch={() => net.switchTo("story")}
         >
           <SubscribeCard
-            strategyName={mockStrategy.name}
+            strategyName={env.strategyName}
             monthlyPriceWip={sub.monthlyPriceWip}
             status={sub.status}
             activeUntil={sub.activeUntil}
@@ -73,25 +82,18 @@ function StrategyLive({ id }: { id: Hex }) {
   );
 }
 
-// ───────────────────────── mock (no wallet / no env) ─────────────────────────
+// ───────────── unknown strategy (single-strategy MVP: only the configured one exists) ─────────────
 
-function StrategyMock({ id }: { id: string }) {
-  const strat = mockLeaderboard.find((s) => s.id === id) ?? mockLeaderboard[0];
-  if (!strat) throw notFound();
-
+function StrategyNotFound() {
   return (
-    <main className="mx-auto max-w-4xl px-4 py-10">
-      <StrategyHeader
-        name={strat.name}
-        verifiedReturnPct={strat.verifiedReturnPct}
-        winRatePct={strat.winRatePct}
-        maxDrawdownPct={strat.maxDrawdownPct}
-        subscribers={strat.subscribers}
-        publishedSignals={mockPublishedSignals}
-      />
-      <div className="mt-8 flex justify-end">
-        <Button asChild size="lg">
-          <Link to="/follower">Follow this strategy</Link>
+    <main className="mx-auto max-w-2xl px-4 py-20 text-center">
+      <h1 className="text-2xl font-semibold tracking-tight">Strategy not found</h1>
+      <p className="mt-2 text-sm text-muted-foreground">
+        This deployment runs a single configured strategy. Browse it on the leaderboard.
+      </p>
+      <div className="mt-6 flex justify-center">
+        <Button asChild>
+          <Link to="/leaderboard">Back to leaderboard</Link>
         </Button>
       </div>
     </main>
