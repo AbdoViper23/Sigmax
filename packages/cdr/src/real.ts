@@ -20,13 +20,18 @@ import {
 import { type CdrPort, ReadConditionDenied } from "./port.js";
 
 export interface RealCdrConfig {
-  privateKey: Hex; // CDR access key — funded Aeneid wallet; holds the operator license
+  privateKey: Hex; // CDR access key — funded Aeneid wallet; writes vaults + holds the operator licenses
   rpcUrl?: string; // Story RPC (default Aeneid public)
   apiUrl: string; // Story-API REST base (DKG partials endpoint)
   network?: "mainnet" | "testnet"; // cdr-contracts Network — Aeneid IS "testnet" (NOT "aeneid")
-  ipId: Hex; // strategy IP Asset (ERC-6551 address)
-  leader: Hex; // owner allowed to write (OwnerWriteCondition)
-  operatorLicenseTokenId: bigint; // license token id the agent holds for ipId
+  /**
+   * MULTI-LEADER: a vault is read-gated to (licenseToken, ipId) where ipId = signal.strategyId. The
+   * agent satisfies the gate by presenting the license token id(s) it holds; passing ALL of them lets
+   * the on-chain condition match the right one for whichever IP the vault belongs to — so the agent
+   * never needs to know a vault's IP up front. Supplied as a callback so the set can refresh as new
+   * leaders mint licenses to the agent.
+   */
+  getLicenseTokenIds: () => bigint[];
 }
 
 const storyChain = defineChain({
@@ -40,10 +45,12 @@ const storyChain = defineChain({
 export class RealCdr implements CdrPort {
   private readonly client: CDRClient;
   private readonly cfg: RealCdrConfig;
+  private readonly ownerAddress: Hex; // the agent's CDR wallet — the vault writer (OwnerWriteCondition)
 
   constructor(cfg: RealCdrConfig) {
     this.cfg = cfg;
     const account = privateKeyToAccount(cfg.privateKey);
+    this.ownerAddress = account.address;
     const transport = http(cfg.rpcUrl ?? STORY_AENEID.rpcUrl);
     const publicClient = createPublicClient({ chain: storyChain, transport });
     const walletClient = createWalletClient({ account, chain: storyChain, transport });
@@ -58,11 +65,13 @@ export class RealCdr implements CdrPort {
 
   async publishSignal(signal: Signal): Promise<{ uuid: number }> {
     await initWasm();
+    // Read-gate this vault to the signal's own leader IP, so only an agent holding a license for THAT
+    // IP can decrypt it (per-leader confidentiality). The agent's wallet is the writer (owner).
     const readConditionData = encodeAbiParameters(
       [{ type: "address" }, { type: "address" }],
-      [STORY_AENEID_ADDRESSES.licenseToken as Hex, this.cfg.ipId],
+      [STORY_AENEID_ADDRESSES.licenseToken as Hex, signal.strategyId as Hex],
     );
-    const writeConditionData = encodeAbiParameters([{ type: "address" }], [this.cfg.leader]);
+    const writeConditionData = encodeAbiParameters([{ type: "address" }], [this.ownerAddress]);
     const { uuid } = await this.client.uploader.uploadCDR({
       dataKey: hexToBytes(encodeSignal(signal)),
       updatable: false, // fresh vault per signal → independently auditable (doc 20 §4)
@@ -77,10 +86,10 @@ export class RealCdr implements CdrPort {
 
   async accessSignal(uuid: number): Promise<Signal> {
     await initWasm();
-    const accessAuxData = encodeAbiParameters(
-      [{ type: "uint256[]" }],
-      [[this.cfg.operatorLicenseTokenId]],
-    );
+    // Present ALL license tokens the agent holds; the read condition matches whichever one is a valid
+    // license for this vault's IP. No need to know the vault's IP up front (avoids a decrypt chicken/egg).
+    const tokenIds = this.cfg.getLicenseTokenIds();
+    const accessAuxData = encodeAbiParameters([{ type: "uint256[]" }], [tokenIds]);
     try {
       const { dataKey } = await this.client.consumer.accessCDR({
         uuid,

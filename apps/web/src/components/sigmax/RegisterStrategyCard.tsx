@@ -15,12 +15,19 @@ export interface RegisterStrategyCardProps {
     displayName: string;
     monthlyPriceWip: string;
   }) => Promise<void>;
+  /** Optional progress line shown under the button (e.g. multi-step on-chain registration). */
+  statusNote?: string;
 }
 
 const PLATFORM_FEE_PCT = 15;
 const USERNAME_RE = /^[a-z0-9_]{3,20}$/;
 
-export function RegisterStrategyCard({ registered, ipId, onRegister }: RegisterStrategyCardProps) {
+export function RegisterStrategyCard({
+  registered,
+  ipId,
+  onRegister,
+  statusNote,
+}: RegisterStrategyCardProps) {
   const [username, setUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [price, setPrice] = useState("5");
@@ -132,6 +139,7 @@ export function RegisterStrategyCard({ registered, ipId, onRegister }: RegisterS
             })
           }
         />
+        {statusNote && <p className="text-center text-xs text-muted-foreground">{statusNote}</p>}
       </CardContent>
     </Card>
   );

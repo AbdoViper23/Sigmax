@@ -33,9 +33,8 @@ async function main() {
       rpcUrl: process.env.STORY_RPC_URL,
       apiUrl: process.env.STORY_API_URL!,
       network: process.env.CDR_NETWORK as "mainnet" | "testnet" | undefined,
-      ipId: (process.env.STRATEGY_IP_ID as `0x${string}`),
-      leader: (process.env.LEADER_ADDRESS ?? process.env.STRATEGY_IP_ID) as `0x${string}`,
-      operatorLicenseTokenId: BigInt(process.env.OPERATOR_LICENSE_TOKEN_ID!),
+      // The vault is read-gated to signal.strategyId; the agent presents the license id(s) it holds.
+      getLicenseTokenIds: () => [BigInt(process.env.OPERATOR_LICENSE_TOKEN_ID!)],
     });
   } else {
     console.log("▶ MOCK CDR (no creds). To run live, set: CDR_KEY, STORY_API_URL, STRATEGY_IP_ID, OPERATOR_LICENSE_TOKEN_ID");

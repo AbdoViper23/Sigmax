@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useAccount } from "wagmi";
+import type { Hex } from "viem";
 import { Check, Lock } from "lucide-react";
 import { RegisterStrategyCard } from "@/components/sigmax/RegisterStrategyCard";
 import { PublishSignalForm } from "@/components/sigmax/PublishSignalForm";
@@ -10,10 +11,10 @@ import { NetworkSwitchPrompt } from "@/components/sigmax/NetworkSwitchPrompt";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { chainConfigReady, env, publishableTokens } from "@/lib/env";
 import { useNetwork } from "@/hooks/useNetwork";
-import { useLeaderPlan, usePublishSignal, useStrategyStats } from "@/hooks/leader";
-import { useStrategyPerformance } from "@/hooks/strategies";
+import { usePublishSignal, useStrategyStats } from "@/hooks/leader";
+import { useLeaders } from "@/hooks/leaders";
+import { useRegisterLeader, type RegisterStep } from "@/hooks/useStoryIp";
 import { addPublishedSignal, getPublishedSignals } from "@/lib/publishedSignals";
-import { setLeaderProfile } from "@/lib/leaderProfiles";
 import { mockTx } from "@/lib/mock";
 
 export const Route = createFileRoute("/leader")({
@@ -41,14 +42,24 @@ function Shell({ children }: { children: React.ReactNode }) {
       <div>
         <h1 className="text-3xl font-semibold tracking-tight">Become a leader</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Register once with a handle, name and price. Then publish encrypted signals on Story
-          Aeneid — revenue is paid to your wallet automatically.
+          Register once — your wallet creates a Story IP for your strategy and grants the agent a
+          license to execute. Then publish encrypted signals; revenue is paid to your wallet
+          automatically.
         </p>
       </div>
       {children}
     </main>
   );
 }
+
+const STEP_TEXT: Record<RegisterStep, string> = {
+  idle: "",
+  "registering-ip": "1/4 · Registering your Story IP asset…",
+  "attaching-terms": "2/4 · Attaching license terms…",
+  "minting-license": "3/4 · Minting the agent's operator license…",
+  "creating-plan": "4/4 · Creating your subscription plan…",
+  done: "Registered ✓",
+};
 
 /** Greyed-out publish area shown until the leader registers — makes "register first" obvious. */
 function LockedPublish() {
@@ -71,16 +82,23 @@ function LockedPublish() {
   );
 }
 
-// ───────────────────────── live (real web3) ─────────────────────────
+// ───────────────────────── live (real web3, self-serve) ─────────────────────────
 
 function LeaderLive() {
   const net = useNetwork();
-  const plan = useLeaderPlan();
-  const stats = useStrategyStats();
-  const perf = useStrategyPerformance();
-  const { publish } = usePublishSignal();
+  const { address } = useAccount();
+  const { leaders } = useLeaders();
+
+  // A leader's own strategy is the plan whose on-chain leader == the connected wallet.
+  const mine = leaders.find((l) => l.leaderAddress.toLowerCase() === address?.toLowerCase());
+  const myId = mine?.id as Hex | undefined;
+  const registered = Boolean(mine);
+
+  const { register, step } = useRegisterLeader();
+  const stats = useStrategyStats(myId);
+  const { publish } = usePublishSignal(myId);
   const [publishing, setPublishing] = useState(false);
-  const [signals, setSignals] = useState(() => getPublishedSignals(env.strategyIpId));
+  const [signals, setSignals] = useState(() => getPublishedSignals(myId));
 
   const lastPublished = signals[0]
     ? {
@@ -100,31 +118,26 @@ function LeaderLive() {
           onSwitch={() => net.switchTo("story")}
         >
           <RegisterStrategyCard
-            registered={plan.registered}
-            ipId={plan.ipId}
+            registered={registered}
+            ipId={mine?.id}
+            statusNote={STEP_TEXT[step]}
             onRegister={async (v) => {
-              await plan.createPlan(v);
-              // Persist the off-chain profile so the leaderboard/detail show name + handle.
-              setLeaderProfile(env.strategyIpId, {
-                username: v.username,
-                displayName: v.displayName,
-                monthlyPriceWip: v.monthlyPriceWip,
-              });
+              await register(v);
               toast.success(`Registered as "${v.displayName}"`);
             }}
           />
         </NetworkSwitchPrompt>
 
-        {/* All real: subscribers + total earned from Subscribed events; return from on-chain trades. */}
+        {/* Per-leader: subscribers + earned from this strategy's Subscribed events; return from trades. */}
         <StrategyStatsCard
           subscribers={stats.subscribers}
           signalsPublished={signals.length}
-          verifiedReturnPct={perf.verifiedReturnPct}
+          verifiedReturnPct={mine?.performance.verifiedReturnPct ?? null}
           totalEarnedWip={stats.totalEarnedWip}
         />
       </div>
 
-      {plan.registered ? (
+      {registered && myId ? (
         <NetworkSwitchPrompt
           requiredChain="story"
           current={net.current}
@@ -139,7 +152,7 @@ function LeaderLive() {
               try {
                 const r = await publish(v);
                 setSignals(
-                  addPublishedSignal(env.strategyIpId, {
+                  addPublishedSignal(myId, {
                     signalId: r.signalId,
                     uuid: r.uuid,
                     action: v.action,

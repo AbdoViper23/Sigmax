@@ -39,7 +39,30 @@ export class RegistrySubscriberSource implements SubscriberSource {
     });
   }
 
-  async listFollowers(_strategyId: Hex): Promise<Hex[]> {
-    return this.cfg.followers;
+  /**
+   * Followers of a strategy, discovered on-chain by scanning `Subscribed(strategyId)` events on Story
+   * (multi-leader: each strategy gets its own subscriber set). The pipeline still gates each one with
+   * `isActive` before executing, so returning ever-subscribed addresses (a superset) is safe. Any
+   * `cfg.followers` are merged in as a local-dev override.
+   */
+  async listFollowers(strategyId: Hex): Promise<Hex[]> {
+    const set = new Set<Hex>(this.cfg.followers.map((f) => f.toLowerCase() as Hex));
+    try {
+      const logs = await this.publicClient.getContractEvents({
+        address: this.cfg.registryAddress,
+        abi: SUBSCRIPTION_REGISTRY_ABI,
+        eventName: "Subscribed",
+        args: { strategyId },
+        fromBlock: "earliest",
+        toBlock: "latest",
+      });
+      for (const l of logs) {
+        const subscriber = (l.args as { subscriber?: Hex }).subscriber;
+        if (subscriber) set.add(subscriber.toLowerCase() as Hex);
+      }
+    } catch {
+      // On a query failure, fall back to the configured set (don't crash the run).
+    }
+    return [...set];
   }
 }

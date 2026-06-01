@@ -45,12 +45,17 @@ contract SubscriptionRegistry is ReentrancyGuard {
     /// @notice strategyId => subscriber => subscription record.
     mapping(address => mapping(address => Sub)) public subs;
 
+    /// @dev `username`/`displayName` are off-chain-style profile labels surfaced ONLY in this event
+    ///      (not stored in `Plan`, so plan reads stay cheap). Clients discover leaders by scanning
+    ///      `PlanCreated` and read the labels from the log. Not enforced unique on-chain.
     event PlanCreated(
         address indexed strategyId,
         address indexed leader,
         address payToken,
         uint256 monthlyPrice,
-        uint16 platformFeeBps
+        uint16 platformFeeBps,
+        string username,
+        string displayName
     );
     event PlanActiveSet(address indexed strategyId, bool active);
     event MonthlyPriceSet(address indexed strategyId, uint256 monthlyPrice);
@@ -81,7 +86,16 @@ contract SubscriptionRegistry is ReentrancyGuard {
     /// @param payToken ERC-20 used to pay (e.g. $WIP).
     /// @param monthlyPrice Price for one 30-day period, in `payToken` smallest units.
     /// @param platformFeeBps Platform cut in basis points; must be <= MAX_FEE_BPS.
-    function createPlan(address strategyId, address payToken, uint256 monthlyPrice, uint16 platformFeeBps) external {
+    /// @param username Public handle for the leader (label only; emitted in PlanCreated, not stored).
+    /// @param displayName Public display name for the strategy (label only; emitted, not stored).
+    function createPlan(
+        address strategyId,
+        address payToken,
+        uint256 monthlyPrice,
+        uint16 platformFeeBps,
+        string calldata username,
+        string calldata displayName
+    ) external {
         if (strategyId == address(0) || payToken == address(0)) revert ZeroAddress();
         if (platformFeeBps > MAX_FEE_BPS) revert FeeTooHigh();
         if (plans[strategyId].leader != address(0)) revert PlanExists();
@@ -94,7 +108,7 @@ contract SubscriptionRegistry is ReentrancyGuard {
             active: true
         });
 
-        emit PlanCreated(strategyId, msg.sender, payToken, monthlyPrice, platformFeeBps);
+        emit PlanCreated(strategyId, msg.sender, payToken, monthlyPrice, platformFeeBps, username, displayName);
     }
 
     /// @notice Pause or resume new subscriptions for a strategy. Does not affect existing subs.

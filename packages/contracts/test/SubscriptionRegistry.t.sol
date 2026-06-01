@@ -19,13 +19,15 @@ contract SubscriptionRegistryTest is Test {
 
     uint256 constant PRICE = 100e18; // 100 $WIP
     uint16 constant FEE_BPS = 1500; // 15% platform cut
+    string constant USERNAME = "momentum_alpha";
+    string constant DISPLAY_NAME = "Momentum Alpha";
 
     function setUp() public {
         registry = new SubscriptionRegistry(treasury);
         pay = new ERC20Mock();
 
         vm.prank(leader);
-        registry.createPlan(strategyId, address(pay), PRICE, FEE_BPS);
+        registry.createPlan(strategyId, address(pay), PRICE, FEE_BPS, USERNAME, DISPLAY_NAME);
 
         // Fund the follower and approve the registry generously for multiple subscriptions.
         pay.mint(follower, 1000e18);
@@ -110,13 +112,23 @@ contract SubscriptionRegistryTest is Test {
         address other = makeAddr("otherStrategy");
         vm.prank(leader);
         vm.expectRevert(SubscriptionRegistry.FeeTooHigh.selector);
-        registry.createPlan(other, address(pay), PRICE, 3001);
+        registry.createPlan(other, address(pay), PRICE, 3001, USERNAME, DISPLAY_NAME);
     }
 
     function test_createPlan_duplicate_reverts() public {
         vm.prank(leader);
         vm.expectRevert(SubscriptionRegistry.PlanExists.selector);
-        registry.createPlan(strategyId, address(pay), PRICE, FEE_BPS);
+        registry.createPlan(strategyId, address(pay), PRICE, FEE_BPS, USERNAME, DISPLAY_NAME);
+    }
+
+    function test_createPlan_emitsProfileLabels() public {
+        address other = makeAddr("otherStrategy");
+        vm.expectEmit(true, true, false, true, address(registry));
+        emit SubscriptionRegistry.PlanCreated(
+            other, leader, address(pay), PRICE, FEE_BPS, "deep_value", "Deep Value"
+        );
+        vm.prank(leader);
+        registry.createPlan(other, address(pay), PRICE, FEE_BPS, "deep_value", "Deep Value");
     }
 
     function test_subscribe_revertsWhenInactive() public {

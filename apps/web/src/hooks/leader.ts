@@ -63,7 +63,7 @@ export function useLeaderPlan() {
       address: env.registryAddress,
       abi: SUBSCRIPTION_REGISTRY_ABI,
       functionName: "createPlan",
-      args: [strategyId, env.wip, price, env.platformFeeBps],
+      args: [strategyId, env.wip, price, env.platformFeeBps, v.username, v.displayName],
       chainId: STORY,
     });
     await pub.waitForTransactionReceipt({ hash });
@@ -87,9 +87,9 @@ export function useLeaderPlan() {
  *    SubscriptionRegistry.subscribe). This is real, not an indexer estimate.
  * Returns zeros while loading / when not configured.
  */
-export function useStrategyStats() {
+export function useStrategyStats(strategyIdArg?: Hex) {
   const pub = usePublicClient({ chainId: STORY });
-  const strategyId = env.strategyIpId;
+  const strategyId = strategyIdArg ?? env.strategyIpId;
 
   const q = useQuery({
     queryKey: ["strategy-stats", strategyId, env.platformFeeBps],
@@ -131,9 +131,9 @@ export function useStrategyStats() {
  * builds the structured Signal and POSTs it to the agent's publish endpoint, which encrypts it.
  * When `VITE_AGENT_API_URL` is unset we stay mock so the page still works without the daemon.
  */
-export function usePublishSignal() {
+export function usePublishSignal(strategyIdArg?: Hex) {
   const { address } = useAccount();
-  const strategyId = env.strategyIpId;
+  const strategyId = strategyIdArg ?? env.strategyIpId;
 
   const publish = async (
     form: PublishForm,

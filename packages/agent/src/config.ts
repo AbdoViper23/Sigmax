@@ -20,8 +20,10 @@ export const AgentConfigSchema = z.object({
   // contracts / ids
   registryAddress: address, // SubscriptionRegistry on Story L1
   factoryAddress: address, // CopyVaultFactory on the liquidity chain
-  strategyIpId: address, // the strategy's Story IP Asset (also the eligibility/CDR key)
-  operatorLicenseTokenId: z.coerce.bigint(), // license the agent holds to decrypt
+  // MULTI-LEADER: the agent no longer watches a single strategy — it discovers leaders from
+  // PlanCreated and the licenses it holds. Both fields are optional seeds (e.g. the demo leader).
+  strategyIpId: address.optional(), // optional: a configured demo strategy IP
+  operatorLicenseTokenId: z.coerce.bigint().optional(), // optional: a pre-known operator license id
   // optional
   zeroExApiKey: z.string().optional(), // 0x Swap API v2 key (live quotes)
   liquidityChainId: z.coerce.number().int().positive().default(42161),
@@ -39,7 +41,7 @@ export type AgentConfig = z.infer<typeof AgentConfigSchema> & {
   cdrKey: Hex;
   registryAddress: Hex;
   factoryAddress: Hex;
-  strategyIpId: Hex;
+  strategyIpId?: Hex;
 };
 
 /** Parse process.env into a validated AgentConfig. Throws (with field paths) if anything is missing. */

@@ -18,6 +18,8 @@ export const COPY_VAULT_FACTORY_ABI = parseAbi([
 
 export const SUBSCRIPTION_REGISTRY_ABI = parseAbi([
   "function isActive(address subscriber, address strategyId) view returns (bool)",
+  // discovery: enumerate a strategy's subscribers from events (WS3 multi-leader fan-out)
+  "event Subscribed(address indexed strategyId, address indexed subscriber, uint64 newExpiry, uint256 paid)",
 ]);
 
 export const ERC20_ABI = parseAbi([
