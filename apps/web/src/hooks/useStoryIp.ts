@@ -1,7 +1,9 @@
 import { useCallback, useState } from "react";
 import { http, parseUnits, type Hex } from "viem";
 import { usePublicClient, useWalletClient, useWriteContract } from "wagmi";
-import { StoryClient, PILFlavor, WIP_TOKEN_ADDRESS } from "@story-protocol/core-sdk";
+// NOTE: `@story-protocol/core-sdk` is a heavy, Node-oriented SDK that must NOT be evaluated at module
+// load (it breaks the /leader route in the browser). It is dynamically imported inside register()
+// below, so merely opening the page never touches it.
 import { STORY_AENEID_ADDRESSES } from "@sigmax/shared";
 import { env } from "@/lib/env";
 import { SUBSCRIPTION_REGISTRY_ABI } from "@/lib/abis";
@@ -54,6 +56,8 @@ export function useRegisterLeader() {
       setError(null);
 
       try {
+        // Lazy-load the Story SDK only when the leader actually registers (keeps it out of page load).
+        const { StoryClient, PILFlavor, WIP_TOKEN_ADDRESS } = await import("@story-protocol/core-sdk");
         const story = StoryClient.newClientUseWallet({
           wallet: walletClient,
           transport: http(env.storyRpcUrl),
