@@ -18,6 +18,7 @@
   "dependencies": {
     "@sigmax/shared": "workspace:*",
     "@sigmax/cdr": "workspace:*",
+    "@nktkas/hyperliquid": "^0.32.2",
     "viem": "^2.21.54",
     "zod": "^3.24.1"
   },

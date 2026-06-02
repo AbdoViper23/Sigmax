@@ -5,6 +5,9 @@ import { RealCdr } from "@sigmax/cdr";
 import type { AgentConfig } from "./config.js";
 import { ZeroExExecutor } from "./executor.js";
 import { ChainlinkPriceSource } from "./price.js";
+import { HyperliquidExecutor } from "./hyperliquid/executor.js";
+import { HyperliquidPriceSource } from "./hyperliquid/price.js";
+import type { Executor, PriceSource } from "./ports.js";
 import { RegistrySubscriberSource } from "./subscribers.js";
 import { LicenseDiscovery } from "./licenses.js";
 import { PositionStore } from "./state.js";
@@ -40,14 +43,34 @@ export class Agent {
       apiUrl: cfg.storyApiUrl,
       getLicenseTokenIds: () => this.licenses.get(),
     });
-    const executor = new ZeroExExecutor({
-      agentPk: cfg.agentPk,
-      rpcUrl: cfg.liquidityRpcUrl,
-      chainId: cfg.liquidityChainId,
-      factoryAddress: cfg.factoryAddress,
-      zeroExApiKey: cfg.zeroExApiKey,
-    });
-    const price = new ChainlinkPriceSource({ rpcUrl: cfg.liquidityRpcUrl, chainId: cfg.liquidityChainId });
+    // EXECUTION VENUE: pick the Executor + PriceSource pair. Hyperliquid is additive — the Arbitrum
+    // CopyVault path is the default and is untouched. (config.ts enforces the required env per venue.)
+    let executor: Executor;
+    let price: PriceSource;
+    if (cfg.executionVenue === "hyperliquid") {
+      const hlCfg = {
+        testnet: cfg.hyperliquidTestnet,
+        tokens: cfg.hyperliquidTokens ?? {},
+        // hyperliquidPerTradeCap is required for this venue (config superRefine); fall back defensively.
+        perTradeCap: cfg.hyperliquidPerTradeCap ?? 0n,
+      };
+      // The HL agent key signs orders; falls back to AGENT_PK if a dedicated key isn't set.
+      executor = new HyperliquidExecutor({ agentPk: cfg.hyperliquidAgentPk ?? cfg.agentPk, ...hlCfg });
+      price = new HyperliquidPriceSource(hlCfg);
+    } else {
+      // config.ts guarantees these are present when executionVenue === "arbitrum"; assert for the type.
+      if (!cfg.liquidityRpcUrl || !cfg.factoryAddress) {
+        throw new Error("arbitrum venue requires LIQUIDITY_RPC_URL and FACTORY_ADDRESS");
+      }
+      executor = new ZeroExExecutor({
+        agentPk: cfg.agentPk,
+        rpcUrl: cfg.liquidityRpcUrl,
+        chainId: cfg.liquidityChainId,
+        factoryAddress: cfg.factoryAddress,
+        zeroExApiKey: cfg.zeroExApiKey,
+      });
+      price = new ChainlinkPriceSource({ rpcUrl: cfg.liquidityRpcUrl, chainId: cfg.liquidityChainId });
+    }
     const subscribers = new RegistrySubscriberSource({
       storyRpcUrl: cfg.storyRpcUrl,
       registryAddress: cfg.registryAddress,
