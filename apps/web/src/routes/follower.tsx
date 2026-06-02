@@ -4,37 +4,31 @@ import { toast } from "sonner";
 import { useAccount } from "wagmi";
 import { Stepper } from "@/components/sigmax/Stepper";
 import { SubscribeCard } from "@/components/sigmax/SubscribeCard";
-import { CreateVaultCard } from "@/components/sigmax/CreateVaultCard";
-import { DepositCard } from "@/components/sigmax/DepositCard";
+import { FundStatusCard } from "@/components/sigmax/FundStatusCard";
+import { AuthorizeAgentCard } from "@/components/sigmax/AuthorizeAgentCard";
+import { RevokeControl } from "@/components/sigmax/RevokeControl";
 import { PositionsTable } from "@/components/sigmax/PositionsTable";
-import { RevokePauseControls } from "@/components/sigmax/RevokePauseControls";
 import { SubscriptionStatusBadge } from "@/components/sigmax/SubscriptionStatusBadge";
 import { NetworkSwitchPrompt } from "@/components/sigmax/NetworkSwitchPrompt";
-import { chainConfigReady, env } from "@/lib/env";
+import { hlConfigReady, env } from "@/lib/env";
 import { useNetwork } from "@/hooks/useNetwork";
+import { useSubscription } from "@/hooks/follower";
 import {
-  useBalances,
-  usePositions,
-  useSubscription,
-  useVault,
-  useVaultControls,
-} from "@/hooks/follower";
-import {
-  mockBalances,
-  mockPositions,
-  mockStrategy,
-  mockSubscription,
-  mockVault,
-  mockTx,
-} from "@/lib/mock";
+  useAgentApproval,
+  useApproveAgent,
+  useHlBalance,
+  useHlPositions,
+  useRevokeAgent,
+} from "@/hooks/hyperliquid";
+import { mockPositions, mockStrategy, mockSubscription, mockTx } from "@/lib/mock";
 
 export const Route = createFileRoute("/follower")({
   head: () => ({
     meta: [
-      { title: "Follower dashboard — Sigmax" },
+      { title: "Copy a strategy — Sigmax" },
       {
         name: "description",
-        content: "Subscribe, create your vault, deposit, and copy verified strategies.",
+        content: "Subscribe to a leader, authorize copy-trading, and let the strategy trade for you.",
       },
     ],
   }),
@@ -42,11 +36,12 @@ export const Route = createFileRoute("/follower")({
 });
 
 const STRATEGY_NAME = env.strategyName; // cosmetic display name (config, not on-chain)
+const STEPS = ["Subscribe", "Fund", "Authorize", "Active"];
 
 function FollowerPage() {
   const { isConnected } = useAccount();
-  // Live when contracts are configured (VITE_* env) AND a wallet is connected; else mock for dev/SSR.
-  return chainConfigReady && isConnected ? <FollowerLive /> : <FollowerMock />;
+  // Live when copy-trading is configured (VITE_* env) AND a wallet is connected; else mock for dev/SSR.
+  return hlConfigReady && isConnected ? <FollowerLive /> : <FollowerMock />;
 }
 
 function Shell({ badge, children }: { badge?: React.ReactNode; children: React.ReactNode }) {
@@ -54,9 +49,9 @@ function Shell({ badge, children }: { badge?: React.ReactNode; children: React.R
     <main className="mx-auto max-w-5xl space-y-6 px-4 py-10">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Follow {STRATEGY_NAME}</h1>
+          <h1 className="text-3xl font-semibold tracking-tight">Copy {STRATEGY_NAME}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Three steps to start copying. Funds stay in your vault. Revoke anytime.
+            Subscribe, authorize copy-trading, done. Your funds stay in your own account — revoke anytime.
           </p>
         </div>
         {badge}
@@ -69,29 +64,27 @@ function Shell({ badge, children }: { badge?: React.ReactNode; children: React.R
 // ───────────────────────── live (real web3) ─────────────────────────
 
 function FollowerLive() {
-  const strategyId = env.strategyIpId!; // chainConfigReady guarantees this
+  const strategyId = env.strategyIpId!; // hlConfigReady guarantees this
+  const { address } = useAccount();
   const net = useNetwork();
   const sub = useSubscription(strategyId);
-  const vault = useVault();
-  const balances = useBalances(vault.vaultAddress);
-  const controls = useVaultControls(vault.vaultAddress);
-  const positions = usePositions(vault.vaultAddress);
+  const bal = useHlBalance(address);
+  const approval = useAgentApproval(address);
+  const positions = useHlPositions(address);
+  const { approve } = useApproveAgent();
+  const { revoke } = useRevokeAgent();
 
   const subActive = sub.status === "active";
-  const vaultCreated = Boolean(vault.vaultAddress);
-  const hasDeposit = Number(balances.vaultUsdc.replace(/,/g, "")) > 0;
-  const current = !subActive ? 0 : !vaultCreated ? 1 : !hasDeposit ? 2 : 3;
+  const funded = bal.usdc > 0;
+  const authorized = approval.approved;
+  const current = !subActive ? 0 : !funded ? 1 : !authorized ? 2 : 3;
   const fullySetUp = current === 3;
 
   return (
     <Shell
-      badge={
-        subActive ? (
-          <SubscriptionStatusBadge active={true} expiry={sub.activeUntil ?? null} />
-        ) : undefined
-      }
+      badge={subActive ? <SubscriptionStatusBadge active expiry={sub.activeUntil ?? null} /> : undefined}
     >
-      <Stepper steps={["Subscribe", "Create vault", "Deposit", "Copying"]} current={current} />
+      <Stepper steps={STEPS} current={current} />
 
       {!fullySetUp ? (
         <div className="grid gap-6 lg:grid-cols-3">
@@ -115,38 +108,25 @@ function FollowerLive() {
           </div>
 
           <div className={current === 1 ? "" : "pointer-events-none opacity-50"}>
-            <NetworkSwitchPrompt
-              requiredChain="arbitrum"
-              current={net.current}
-              onSwitch={() => net.switchTo("arbitrum")}
-            >
-              <CreateVaultCard
-                status={vault.status}
-                vaultAddress={vault.vaultAddress}
-                onCreate={async (v) => {
-                  await vault.createVault(v);
-                  toast.success("Vault deployed");
-                }}
-              />
-            </NetworkSwitchPrompt>
+            <FundStatusCard
+              usdc={bal.usdc}
+              loading={bal.loading}
+              onRecheck={async () => {
+                await bal.refetch();
+              }}
+            />
           </div>
 
           <div className={current === 2 ? "" : "pointer-events-none opacity-50"}>
-            <NetworkSwitchPrompt
-              requiredChain="arbitrum"
-              current={net.current}
-              onSwitch={() => net.switchTo("arbitrum")}
-            >
-              <DepositCard
-                walletUsdc={balances.walletUsdc}
-                vaultUsdc={balances.vaultUsdc}
-                status="idle"
-                onDeposit={async (amt) => {
-                  await balances.deposit(amt);
-                  toast.success(`Deposited ${amt} USDC`);
-                }}
-              />
-            </NetworkSwitchPrompt>
+            <AuthorizeAgentCard
+              approved={authorized}
+              loading={approval.loading}
+              onAuthorize={async () => {
+                await approve();
+                await approval.refetch();
+                toast.success("Copy-trading authorized");
+              }}
+            />
           </div>
         </div>
       ) : (
@@ -155,25 +135,12 @@ function FollowerLive() {
             <PositionsTable positions={positions.positions} loading={positions.loading} />
           </div>
           <div className="space-y-6">
-            <RevokePauseControls
-              paused={controls.paused}
-              agentAuthorized={controls.agentAuthorized}
-              onTogglePause={async (next) => {
-                await controls.togglePause(next);
-                toast.success(next ? "Copying paused" : "Copying resumed");
-              }}
+            <FundStatusCard usdc={bal.usdc} loading={bal.loading} onRecheck={async () => void bal.refetch()} />
+            <RevokeControl
               onRevoke={async () => {
-                await controls.revoke();
-                toast.success("Agent revoked");
-              }}
-            />
-            <DepositCard
-              walletUsdc={balances.walletUsdc}
-              vaultUsdc={balances.vaultUsdc}
-              status="idle"
-              onDeposit={async (amt) => {
-                await balances.deposit(amt);
-                toast.success(`Deposited ${amt} USDC`);
+                await revoke();
+                await approval.refetch();
+                toast.success("Copy-trading stopped");
               }}
             />
           </div>
@@ -186,43 +153,32 @@ function FollowerLive() {
 // ───────────────────────── mock (no wallet / no env) ─────────────────────────
 
 type SubStatus = "idle" | "subscribing" | "active";
-type VaultStatus = "idle" | "creating" | "created";
 
 function FollowerMock() {
   const [subStatus, setSubStatus] = useState<SubStatus>("idle");
-  const [vaultStatus, setVaultStatus] = useState<VaultStatus>("idle");
-  const [vaultAddress, setVaultAddress] = useState<string | undefined>();
-  const [vaultBalance, setVaultBalance] = useState(mockBalances.vaultUsdc);
-  const [paused, setPaused] = useState(false);
-  const [agentAuthorized, setAgentAuthorized] = useState(true);
+  const [balance, setBalance] = useState(0);
+  const [authorized, setAuthorized] = useState(false);
   const [activeUntil, setActiveUntil] = useState<string | undefined>();
 
-  const currentChain = "story" as const;
-
-  const current =
-    subStatus !== "active"
-      ? 0
-      : vaultStatus !== "created"
-        ? 1
-        : Number(vaultBalance.replace(/[^\d.-]/g, "")) <= 0
-          ? 2
-          : 3;
+  const subActive = subStatus === "active";
+  const funded = balance > 0;
+  const current = !subActive ? 0 : !funded ? 1 : !authorized ? 2 : 3;
   const fullySetUp = current === 3;
 
   return (
     <Shell
       badge={
-        subStatus === "active" ? (
-          <SubscriptionStatusBadge active={true} expiry={activeUntil ?? mockSubscription.expiry} />
+        subActive ? (
+          <SubscriptionStatusBadge active expiry={activeUntil ?? mockSubscription.expiry} />
         ) : undefined
       }
     >
-      <Stepper steps={["Subscribe", "Create vault", "Deposit", "Copying"]} current={current} />
+      <Stepper steps={STEPS} current={current} />
 
       {!fullySetUp ? (
         <div className="grid gap-6 lg:grid-cols-3">
           <div className={current === 0 ? "" : "pointer-events-none opacity-50"}>
-            <NetworkSwitchPrompt requiredChain="story" current={currentChain} onSwitch={mockTx}>
+            <NetworkSwitchPrompt requiredChain="story" current="story" onSwitch={mockTx}>
               <SubscribeCard
                 strategyName={STRATEGY_NAME}
                 monthlyPriceWip={mockStrategy.monthlyPriceWip}
@@ -245,41 +201,25 @@ function FollowerMock() {
           </div>
 
           <div className={current === 1 ? "" : "pointer-events-none opacity-50"}>
-            <NetworkSwitchPrompt requiredChain="arbitrum" current={currentChain} onSwitch={mockTx}>
-              <CreateVaultCard
-                status={vaultStatus}
-                vaultAddress={vaultAddress}
-                onCreate={async () => {
-                  setVaultStatus("creating");
-                  try {
-                    await mockTx();
-                    setVaultStatus("created");
-                    setVaultAddress(mockVault.address);
-                    toast.success("Vault deployed");
-                  } catch (e) {
-                    setVaultStatus("idle");
-                    throw e;
-                  }
-                }}
-              />
-            </NetworkSwitchPrompt>
+            <FundStatusCard
+              usdc={balance}
+              onRecheck={async () => {
+                await mockTx();
+                setBalance(250); // simulate funds arriving
+                toast.success("Balance updated");
+              }}
+            />
           </div>
 
           <div className={current === 2 ? "" : "pointer-events-none opacity-50"}>
-            <NetworkSwitchPrompt requiredChain="arbitrum" current={currentChain} onSwitch={mockTx}>
-              <DepositCard
-                walletUsdc={mockBalances.walletUsdc}
-                vaultUsdc={vaultBalance}
-                status="idle"
-                onDeposit={async (amt) => {
-                  await mockTx();
-                  setVaultBalance(
-                    (Number(vaultBalance.replace(/,/g, "")) + Number(amt)).toFixed(2),
-                  );
-                  toast.success(`Deposited ${amt} USDC`);
-                }}
-              />
-            </NetworkSwitchPrompt>
+            <AuthorizeAgentCard
+              approved={authorized}
+              onAuthorize={async () => {
+                await mockTx();
+                setAuthorized(true);
+                toast.success("Copy-trading authorized");
+              }}
+            />
           </div>
         </div>
       ) : (
@@ -288,28 +228,12 @@ function FollowerMock() {
             <PositionsTable positions={mockPositions} loading={false} />
           </div>
           <div className="space-y-6">
-            <RevokePauseControls
-              paused={paused}
-              agentAuthorized={agentAuthorized}
-              onTogglePause={async (next) => {
-                await mockTx();
-                setPaused(next);
-                toast.success(next ? "Copying paused" : "Copying resumed");
-              }}
+            <FundStatusCard usdc={balance} onRecheck={async () => void mockTx()} />
+            <RevokeControl
               onRevoke={async () => {
                 await mockTx();
-                setAgentAuthorized(false);
-                toast.success("Agent revoked");
-              }}
-            />
-            <DepositCard
-              walletUsdc={mockBalances.walletUsdc}
-              vaultUsdc={vaultBalance}
-              status="idle"
-              onDeposit={async (amt) => {
-                await mockTx();
-                setVaultBalance((Number(vaultBalance.replace(/,/g, "")) + Number(amt)).toFixed(2));
-                toast.success(`Deposited ${amt} USDC`);
+                setAuthorized(false);
+                toast.success("Copy-trading stopped");
               }}
             />
           </div>

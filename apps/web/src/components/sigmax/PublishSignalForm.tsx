@@ -32,6 +32,7 @@ export interface PublishSignalFormProps {
 
 const initialState = {
   action: "ENTRY" as "ENTRY" | "EXIT",
+  orderType: "MARKET" as "MARKET" | "LIMIT",
   token: "",
   sizePercent: 100,
   maxEntryPrice: "",
@@ -57,6 +58,10 @@ export function PublishSignalForm({
     for (const k of ["maxEntryPrice", "takeProfitPrice", "stopLossPrice"] as const) {
       if (s[k] && Number(s[k]) < 0) e[k] = "Must be ≥ 0";
     }
+    // A limit order needs a price; a market order fills at the current price.
+    if (s.action === "ENTRY" && s.orderType === "LIMIT" && !(Number(s.maxEntryPrice) > 0)) {
+      e.maxEntryPrice = "Enter a limit price";
+    }
     setErrors(e);
     return Object.keys(e).length === 0;
   }
@@ -67,7 +72,8 @@ export function PublishSignalForm({
       action: s.action,
       token: s.token,
       sizePercent: s.sizePercent,
-      maxEntryPrice: s.maxEntryPrice || undefined,
+      // MARKET → no price cap (fills now); LIMIT → the entry price cap.
+      maxEntryPrice: s.action === "ENTRY" && s.orderType === "LIMIT" ? s.maxEntryPrice || undefined : undefined,
       takeProfitPrice: s.takeProfitPrice || undefined,
       stopLossPrice: s.stopLossPrice || undefined,
       slippagePercent: s.slippagePercent,
@@ -154,19 +160,46 @@ export function PublishSignalForm({
           />
         </div>
 
-        {/* Max entry */}
-        <div className="space-y-1.5">
-          <Label htmlFor="max-entry">Max entry price (USD) — optional</Label>
-          <Input
-            id="max-entry"
-            type="number"
-            min="0"
-            step="0.01"
-            value={s.maxEntryPrice}
-            onChange={(e) => setS({ ...s, maxEntryPrice: e.target.value })}
-            placeholder="—"
-          />
-        </div>
+        {/* Order type — only relevant for entries */}
+        {s.action === "ENTRY" && (
+          <div className="space-y-1.5">
+            <Label>Order type</Label>
+            <div className="inline-flex rounded-md border border-border p-0.5">
+              {(["MARKET", "LIMIT"] as const).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setS({ ...s, orderType: t })}
+                  className={cn(
+                    "rounded-sm px-4 py-1.5 text-sm font-medium transition-colors",
+                    s.orderType === t
+                      ? "bg-foreground text-background"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {t === "MARKET" ? "Market" : "Limit"}
+                </button>
+              ))}
+            </div>
+            {s.orderType === "MARKET" ? (
+              <p className="text-xs text-muted-foreground">Fills immediately at the current price.</p>
+            ) : (
+              <div className="space-y-1.5 pt-1">
+                <Label htmlFor="limit-price">Limit price (USD)</Label>
+                <Input
+                  id="limit-price"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={s.maxEntryPrice}
+                  onChange={(e) => setS({ ...s, maxEntryPrice: e.target.value })}
+                  placeholder="e.g. 70.00"
+                />
+                {errors.maxEntryPrice && <p className="text-xs text-danger">{errors.maxEntryPrice}</p>}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Secret block */}
         <div className="space-y-3 rounded-md border border-dashed border-border bg-muted/30 p-3">

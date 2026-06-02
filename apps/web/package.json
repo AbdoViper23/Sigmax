@@ -40,6 +40,7 @@
     "@radix-ui/react-toggle": "^1.1.10",
     "@radix-ui/react-toggle-group": "^1.1.11",
     "@radix-ui/react-tooltip": "^1.2.8",
+    "@nktkas/hyperliquid": "^0.32.2",
     "@rainbow-me/rainbowkit": "^2.2.11",
     "@sigmax/shared": "workspace:*",
     "@story-protocol/core-sdk": "^1.4.4",
