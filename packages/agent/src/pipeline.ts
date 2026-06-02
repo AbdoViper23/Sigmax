@@ -115,6 +115,9 @@ export class SignalPipeline {
           tokenOut: token,
           amountIn,
           slippageBps: this.d.defaultSlippageBps,
+          // LIMIT vs MARKET: a non-zero maxEntryPrice caps the entry fill price (venue places a limit
+          // order at it); "0" = market. EXIT/TP-SL below never pass it (exits are always market).
+          maxEntryPrice: BigInt(signal.maxEntryPrice),
         });
         this.d.store.open({
           signalId: signal.signalId,

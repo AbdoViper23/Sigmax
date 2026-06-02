@@ -13,13 +13,19 @@ export interface Executor {
   balanceOf(vault: Hex, token: Hex): Promise<bigint>;
   /** The vault's per-trade cap (smallest units of tokenIn). */
   perTradeCap(vault: Hex): Promise<bigint>;
-  /** Quote `tokenIn→tokenOut` for `amountIn` and call CopyVault.executeSwap. Returns tx hash + amount received. */
+  /**
+   * Quote `tokenIn→tokenOut` for `amountIn` and execute the spot trade. Returns tx hash + amount received.
+   * `maxEntryPrice` (PRICE_SCALE/1e8, in quote terms; `0n`/undefined = none) caps an ENTRY's fill price:
+   * a venue that supports it places a limit at that price (fill-or-skip) instead of a market order.
+   * EXIT / TP-SL never pass it (exits are always market).
+   */
   quoteAndSwap(args: {
     vault: Hex;
     tokenIn: Hex;
     tokenOut: Hex;
     amountIn: bigint;
     slippageBps: number;
+    maxEntryPrice?: bigint;
   }): Promise<{ txHash: Hex; received: bigint }>;
 }
 

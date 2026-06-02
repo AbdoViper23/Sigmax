@@ -118,6 +118,9 @@ export class ZeroExExecutor implements Executor {
     tokenOut: Hex;
     amountIn: bigint;
     slippageBps: number;
+    // Accepted for interface parity with the HL venue; the 0x/Arbitrum path stays market-only for now
+    // (limit-entry support via 0x is future work). maxEntryPrice is intentionally ignored here.
+    maxEntryPrice?: bigint;
   }): Promise<{ txHash: Hex; received: bigint }> {
     const { router, swapData, minOut } = await this.quote(args);
     const balBefore = await this.balanceOf(args.vault, args.tokenOut);

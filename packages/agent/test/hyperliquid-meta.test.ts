@@ -7,6 +7,7 @@ import {
   numberToUnits,
   unitsToNumber,
   assertSpotAsset,
+  planSpotOrder,
   type SpotMeta,
 } from "../src/hyperliquid/meta.js";
 
@@ -90,6 +91,47 @@ describe("uniform units (1e8)", () => {
   it("round-trips a quantity through bigint units", () => {
     expect(numberToUnits(123.45)).toBe(12_345_000_000n);
     expect(unitsToNumber(12_345_000_000n)).toBeCloseTo(123.45);
+  });
+});
+
+describe("planSpotOrder (market vs limit)", () => {
+  const buy = resolvePair(META, "USDC", "HYPE"); // isBuy=true, szDecimals=2
+  const sell = resolvePair(META, "HYPE", "USDC"); // isBuy=false
+
+  it("MARKET buy: sizes off mid and crosses up by slippage", () => {
+    // $100 notional at mid 20, +1% slippage -> price 20.2, size 100/20.2 ≈ 4.95
+    const plan = planSpotOrder(buy, 20, 100, numberToUnits(100), 0n);
+    expect(plan.isLimit).toBe(false);
+    expect(plan.price).toBe("20.2");
+    expect(Number(plan.size)).toBeCloseTo(4.95, 2);
+  });
+
+  it("LIMIT buy: prices at the cap and sizes against it (cost ≤ notional)", () => {
+    // $100 notional, limit 18 -> price 18, size 100/18 ≈ 5.55
+    const plan = planSpotOrder(buy, 20, 100, numberToUnits(100), numberToUnits(18));
+    expect(plan.isLimit).toBe(true);
+    expect(plan.price).toBe("18");
+    expect(Number(plan.size)).toBeCloseTo(5.55, 2);
+  });
+
+  it("MARKET sell: sizes the held base and crosses down", () => {
+    const plan = planSpotOrder(sell, 20, 100, numberToUnits(3), 0n); // sell 3 HYPE
+    expect(plan.isLimit).toBe(false);
+    expect(plan.price).toBe("19.8"); // 20 * (1 - 1%)
+    expect(Number(plan.size)).toBeCloseTo(3, 6);
+  });
+
+  it("ignores maxEntryPrice on a SELL (limit only applies to buys)", () => {
+    expect(planSpotOrder(sell, 20, 100, numberToUnits(3), numberToUnits(18)).isLimit).toBe(false);
+  });
+
+  it("rejects orders below the $10 minimum", () => {
+    expect(() => planSpotOrder(buy, 20, 100, numberToUnits(5), 0n)).toThrow(/below \$10/);
+  });
+
+  it("rejects a size that rounds to zero", () => {
+    // $10 notional at mid 1e6 -> size 1e-5, rounds to 0 at szDecimals 2
+    expect(() => planSpotOrder(buy, 1_000_000, 100, numberToUnits(10), 0n)).toThrow(/rounds to zero/);
   });
 });
 

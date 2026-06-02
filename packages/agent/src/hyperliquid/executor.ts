@@ -4,13 +4,10 @@ import { ExchangeClient, HttpTransport, InfoClient } from "@nktkas/hyperliquid";
 import type { Executor } from "../ports.js";
 import {
   assertSpotAsset,
-  marketableIocPrice,
-  MIN_NOTIONAL_USD,
   normalizeSpotMeta,
   numberToUnits,
+  planSpotOrder,
   resolvePair,
-  roundPrice,
-  roundSize,
   unitsToNumber,
   type SpotMeta,
 } from "./meta.js";
@@ -73,9 +70,13 @@ export class HyperliquidExecutor implements Executor {
   }
 
   /**
-   * Place a marketable IOC spot order for `tokenIn -> tokenOut`. Buys size the base from the quote
-   * notional; sells convert a held base amount. Returns the HL order id (as a hex string, since HL
-   * has no per-order EVM tx hash) and the amount received in `tokenOut`'s uniform 1e8 units.
+   * Place an IOC spot order for `tokenIn -> tokenOut`. Two modes:
+   *  - MARKET (`maxEntryPrice` 0/undefined): marketable IOC at `mid ± slippage`.
+   *  - LIMIT (`maxEntryPrice > 0` on a BUY): IOC capped at that price — fills now if the book is
+   *    marketable at/under it, otherwise nothing fills and we throw "limit price not reached" (the
+   *    pipeline logs that as a per-follower skip). This matches "execute as soon as posted".
+   * Buys size the base from the quote notional; sells convert a held base amount. Returns the HL
+   * order id (hex — HL has no per-order EVM tx hash) and the amount received in `tokenOut`'s 1e8 units.
    */
   async quoteAndSwap(args: {
     vault: Hex;
@@ -83,6 +84,7 @@ export class HyperliquidExecutor implements Executor {
     tokenOut: Hex;
     amountIn: bigint;
     slippageBps: number;
+    maxEntryPrice?: bigint;
   }): Promise<{ txHash: Hex; received: bigint }> {
     // Resolve coins from the whitelist FIRST so an unmapped token fails fast without any network call.
     const coinIn = this.coinFor(args.tokenIn);
@@ -95,34 +97,26 @@ export class HyperliquidExecutor implements Executor {
     const midStr = mids[pair.midsKey] ?? mids[pair.pairName];
     if (!midStr) throw new Error(`hyperliquid: no mid price for ${pair.pairName}`);
     const mid = Number(midStr);
-    if (!(mid > 0)) throw new Error(`hyperliquid: invalid mid price for ${pair.pairName}`);
 
-    // Size in the base asset, and the $10-min-notional guard (HL rejects orders below $10).
-    let sizeBase: number;
-    if (pair.isBuy) {
-      const notionalUsd = unitsToNumber(args.amountIn); // amountIn is the quote (USDC) notional
-      if (notionalUsd < MIN_NOTIONAL_USD) throw new Error(`hyperliquid: order $${notionalUsd} below $10 minimum`);
-      sizeBase = notionalUsd / mid;
-    } else {
-      sizeBase = unitsToNumber(args.amountIn); // amountIn is the base amount we hold and are selling
-      if (sizeBase * mid < MIN_NOTIONAL_USD) throw new Error(`hyperliquid: order ~$${sizeBase * mid} below $10 minimum`);
-    }
-
-    const p = roundPrice(marketableIocPrice(mid, pair.isBuy, args.slippageBps), pair.szDecimals);
-    const s = roundSize(sizeBase, pair.szDecimals);
-    if (Number(s) <= 0) throw new Error("hyperliquid: order size rounds to zero");
+    // Decide MARKET vs LIMIT and compute the rounded price/size (pure, unit-tested in meta.ts).
+    const plan = planSpotOrder(pair, mid, args.slippageBps, args.amountIn, args.maxEntryPrice ?? 0n);
 
     const res = await this.exchange.order({
-      orders: [{ a: pair.assetId, b: pair.isBuy, p, s, r: false, t: { limit: { tif: "Ioc" } } }],
+      orders: [{ a: pair.assetId, b: pair.isBuy, p: plan.price, s: plan.size, r: false, t: { limit: { tif: "Ioc" } } }],
       grouping: "na",
     });
 
-    const fill = extractFill(res);
-    const filledBase = Number(fill.totalSz);
-    const avgPx = Number(fill.avgPx);
-    if (!(filledBase > 0)) throw new Error("hyperliquid: IOC order did not fill");
+    const fill = extractFill(res); // null = no fill (IOC didn't cross / limit not reached)
+    const filledBase = fill ? Number(fill.totalSz) : 0;
+    if (!(filledBase > 0)) {
+      if (plan.isLimit) {
+        throw new Error(`hyperliquid: limit price ${unitsToNumber(args.maxEntryPrice as bigint)} not reached for ${pair.pairName} — no fill`);
+      }
+      throw new Error("hyperliquid: IOC order did not fill");
+    }
+    const avgPx = Number(fill!.avgPx);
     const received = pair.isBuy ? numberToUnits(filledBase) : numberToUnits(filledBase * avgPx);
-    return { txHash: numberToHex(BigInt(fill.oid)), received };
+    return { txHash: numberToHex(BigInt(fill!.oid)), received };
   }
 
   /** Resolve a signal's EVM-style token address to its HL spot coin symbol (config-mapped). */
@@ -146,12 +140,16 @@ interface OrderFill {
   oid: number;
 }
 
-/** Pull the fill out of an exchange `order` response, surfacing HL errors instead of silent no-ops. */
-function extractFill(res: unknown): OrderFill {
+/**
+ * Pull the fill out of an exchange `order` response. Returns `null` when nothing filled (IOC didn't
+ * cross / resting), so the caller can distinguish "limit not reached" from a real error. Still throws
+ * on an explicit HL `error` status.
+ */
+function extractFill(res: unknown): OrderFill | null {
   const status = (res as { response?: { data?: { statuses?: unknown[] } } }).response?.data?.statuses?.[0];
   if (status && typeof status === "object") {
     if ("filled" in status) return (status as { filled: OrderFill }).filled;
     if ("error" in status) throw new Error(`hyperliquid order error: ${String((status as { error: unknown }).error)}`);
   }
-  throw new Error("hyperliquid: IOC order did not fill (no resting fills accepted)");
+  return null; // resting / no fill
 }

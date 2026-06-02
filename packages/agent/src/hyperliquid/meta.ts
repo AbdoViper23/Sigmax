@@ -162,6 +162,50 @@ export function roundSize(size: number, szDecimals: number): string {
   return stripTrailingZeros(floored.toFixed(szDecimals));
 }
 
+/** A ready-to-send spot order: the rounded price/size strings plus whether it's a limit (vs market). */
+export interface SpotOrderPlan {
+  price: string;
+  size: string;
+  isLimit: boolean;
+}
+
+/**
+ * Pure order planner (no network) — decides MARKET vs LIMIT and computes the rounded price + base size.
+ *  - `maxEntryPriceUnits > 0` on a BUY → LIMIT at that price (size against the cap so cost ≤ notional).
+ *  - otherwise → MARKET (marketable IOC at `mid ± slippage`; buy sizes off mid, sell sizes the held base).
+ * `amountInUnits` is 1e8 units: the quote notional for a buy, the held base amount for a sell.
+ * Throws on the $10-min-notional guard or a zero-rounded size. Extracted so it can be unit-tested.
+ */
+export function planSpotOrder(
+  pair: ResolvedPair,
+  mid: number,
+  slippageBps: number,
+  amountInUnits: bigint,
+  maxEntryPriceUnits: bigint,
+): SpotOrderPlan {
+  if (!(mid > 0)) throw new Error(`hyperliquid: invalid mid price for ${pair.pairName}`);
+  // LIMIT only applies to a BUY entry (exits never carry maxEntryPrice).
+  const limitUsd = pair.isBuy && maxEntryPriceUnits > 0n ? unitsToNumber(maxEntryPriceUnits) : 0;
+  const isLimit = limitUsd > 0;
+  const execPx = isLimit ? limitUsd : marketableIocPrice(mid, pair.isBuy, slippageBps);
+  if (!(execPx > 0)) throw new Error(`hyperliquid: invalid execution price for ${pair.pairName}`);
+
+  let sizeBase: number;
+  if (pair.isBuy) {
+    const notionalUsd = unitsToNumber(amountInUnits); // quote (USDC) notional
+    if (notionalUsd < MIN_NOTIONAL_USD) throw new Error(`hyperliquid: order $${notionalUsd} below $10 minimum`);
+    sizeBase = notionalUsd / execPx; // for a limit buy, size against the cap so cost ≤ notional
+  } else {
+    sizeBase = unitsToNumber(amountInUnits); // held base amount being sold
+    if (sizeBase * mid < MIN_NOTIONAL_USD) throw new Error(`hyperliquid: order ~$${sizeBase * mid} below $10 minimum`);
+  }
+
+  const price = roundPrice(execPx, pair.szDecimals);
+  const size = roundSize(sizeBase, pair.szDecimals);
+  if (Number(size) <= 0) throw new Error("hyperliquid: order size rounds to zero");
+  return { price, size, isLimit };
+}
+
 /** Spot-only guard: every order this venue places must target a spot asset (index ≥ 10000). */
 export function assertSpotAsset(assetId: number): void {
   if (!Number.isInteger(assetId) || assetId < 10_000) {
