@@ -13,7 +13,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "poc": "tsx scripts/poc-agent.ts",
-    "start": "tsx src/main.ts"
+    "start": "tsx --env-file=.env src/main.ts"
   },
   "dependencies": {
     "@sigmax/shared": "workspace:*",

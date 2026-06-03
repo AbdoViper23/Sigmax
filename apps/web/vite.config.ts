@@ -5,6 +5,7 @@
 //     error logger plugins, and sandbox detection (port/host/strictPort).
 // You can pass additional config via defineConfig({ vite: { ... }, etc... }) if needed.
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
+import { nodePolyfills } from "vite-plugin-node-polyfills";
 
 export default defineConfig({
   tanstackStart: {
@@ -12,4 +13,14 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  // The Story SDK (@story-protocol/core-sdk) and its deps expect Node builtins (process.cwd,
+  // path.resolve, …) at runtime. Polyfill them for the browser so /leader registration works.
+  // NB: `stream` is intentionally excluded — aliasing it to stream-browserify breaks TanStack's
+  // SSR build (which imports the real `stream/web`).
+  plugins: [
+    nodePolyfills({
+      include: ["path", "process", "os", "util", "buffer", "crypto", "events"],
+      globals: { Buffer: true, global: true, process: true },
+    }),
+  ],
 });

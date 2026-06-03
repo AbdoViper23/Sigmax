@@ -56,6 +56,13 @@ export function useRegisterLeader() {
       setError(null);
 
       try {
+        // Browser shim: the Node-oriented Story SDK calls `process.cwd()` during init, which the
+        // browser lacks ("process.cwd is not a function"). Provide a no-op before importing it.
+        const g = globalThis as unknown as { process?: { cwd?: () => string; env?: unknown } };
+        if (!g.process) g.process = {};
+        if (typeof g.process.cwd !== "function") g.process.cwd = () => "/";
+        if (!g.process.env) g.process.env = {};
+
         // Lazy-load the Story SDK only when the leader actually registers (keeps it out of page load).
         const { StoryClient, PILFlavor, WIP_TOKEN_ADDRESS } = await import("@story-protocol/core-sdk");
         const story = StoryClient.newClientUseWallet({
