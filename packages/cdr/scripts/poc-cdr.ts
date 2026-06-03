@@ -1,12 +1,21 @@
 /**
- * PoC #1 — CDR publish→decrypt round-trip.
+ * PoC #1 — live CDR publish→decrypt round-trip on Story Aeneid.
  *
- * Live (real Aeneid) when these env vars are set:
- *   CDR_KEY, STORY_API_URL, STRATEGY_IP_ID, OPERATOR_LICENSE_TOKEN_ID  (+ optional STORY_RPC_URL, CDR_NETWORK)
- * Otherwise runs the deterministic MockCdr path and tells you what to set to go live.
+ * Required env: CDR_KEY, STORY_API_URL, OPERATOR_LICENSE_TOKEN_ID
+ *   (+ optional STRATEGY_IP_ID, STORY_RPC_URL, CDR_NETWORK)
+ * Run: pnpm --filter @sigmax/cdr exec tsx --env-file=../agent/.env scripts/poc-cdr.ts
  */
 import { SignalSchema, ARBITRUM_ADDRESSES, type Signal } from "@sigmax/shared";
-import { MockCdr, RealCdr, ReadConditionDenied, type CdrPort } from "../src/index.js";
+import { RealCdr } from "../src/index.js";
+
+function reqEnv(name: string): string {
+  const v = process.env[name];
+  if (!v)
+    throw new Error(
+      `missing required env: ${name} — live CDR needs CDR_KEY, STORY_API_URL, OPERATOR_LICENSE_TOKEN_ID`,
+    );
+  return v;
+}
 
 const signal: Signal = SignalSchema.parse({
   signalId: "12345678-1234-1234-1234-1234567890ab",
@@ -23,23 +32,19 @@ const signal: Signal = SignalSchema.parse({
 });
 
 async function main() {
-  const live = process.env.CDR_KEY && process.env.STORY_API_URL && process.env.OPERATOR_LICENSE_TOKEN_ID;
-  let cdr: CdrPort;
+  const cdrKey = reqEnv("CDR_KEY");
+  const apiUrl = reqEnv("STORY_API_URL");
+  const licenseId = reqEnv("OPERATOR_LICENSE_TOKEN_ID");
 
-  if (live) {
-    console.log("▶ LIVE CDR on Story Aeneid");
-    cdr = new RealCdr({
-      privateKey: process.env.CDR_KEY as `0x${string}`,
-      rpcUrl: process.env.STORY_RPC_URL,
-      apiUrl: process.env.STORY_API_URL!,
-      network: process.env.CDR_NETWORK as "mainnet" | "testnet" | undefined,
-      // The vault is read-gated to signal.strategyId; the agent presents the license id(s) it holds.
-      getLicenseTokenIds: () => [BigInt(process.env.OPERATOR_LICENSE_TOKEN_ID!)],
-    });
-  } else {
-    console.log("▶ MOCK CDR (no creds). To run live, set: CDR_KEY, STORY_API_URL, STRATEGY_IP_ID, OPERATOR_LICENSE_TOKEN_ID");
-    cdr = new MockCdr({ hasLicense: true });
-  }
+  console.log("▶ LIVE CDR on Story Aeneid");
+  const cdr = new RealCdr({
+    privateKey: cdrKey as `0x${string}`,
+    rpcUrl: process.env.STORY_RPC_URL,
+    apiUrl,
+    network: process.env.CDR_NETWORK as "mainnet" | "testnet" | undefined,
+    // The vault is read-gated to signal.strategyId; the agent presents the license id(s) it holds.
+    getLicenseTokenIds: () => [BigInt(licenseId)],
+  });
 
   const t0 = Date.now();
   const { uuid } = await cdr.publishSignal(signal);
@@ -47,19 +52,6 @@ async function main() {
   const ok = JSON.stringify(recovered) === JSON.stringify(signal);
   console.log(`uuid=${uuid}  round-trip=${ok ? "OK ✅" : "MISMATCH ❌"}  latency=${Date.now() - t0}ms`);
   if (!ok) process.exit(1);
-
-  // Negative: an unlicensed reader must be denied.
-  if (!live) {
-    const denied = new MockCdr({ hasLicense: false });
-    const { uuid: u2 } = await denied.publishSignal(signal);
-    try {
-      await denied.accessSignal(u2);
-      console.error("negative test FAILED: unlicensed read succeeded ❌");
-      process.exit(1);
-    } catch (e) {
-      console.log(`no-license read correctly denied ✅ (${e instanceof ReadConditionDenied ? "ReadConditionDenied" : "error"})`);
-    }
-  }
   console.log("PoC #1 done.");
 }
 

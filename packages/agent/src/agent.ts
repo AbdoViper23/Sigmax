@@ -1,7 +1,7 @@
 import type { Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import type { Signal, SignalVenueT } from "@sigmax/shared";
-import { RealCdr, MockCdr, type CdrPort } from "@sigmax/cdr";
+import { RealCdr, type CdrPort } from "@sigmax/cdr";
 import type { AgentConfig } from "./config.js";
 import { ZeroExExecutor } from "./executor.js";
 import { ChainlinkPriceSource } from "./price.js";
@@ -24,33 +24,28 @@ export class Agent {
   readonly pipeline: SignalPipeline;
   readonly monitor: TpSlMonitor;
   private readonly cdr: CdrPort;
-  private readonly licenses?: LicenseDiscovery; // only in real-CDR mode (mock needs no licenses)
+  private readonly licenses: LicenseDiscovery;
   private readonly logger: AgentLogger;
 
   constructor(cfg: AgentConfig, logger = new AgentLogger()) {
     this.logger = logger;
-    // SIGNAL PATH: mock CDR runs the execution loop with no Story-API / licenses (Stage A demo);
-    // real CDR is the confidential product path.
-    if (cfg.cdrMode === "mock") {
-      this.cdr = new MockCdr();
-    } else {
-      if (!cfg.cdrKey || !cfg.storyApiUrl) throw new Error("cdrMode=real requires CDR_KEY and STORY_API_URL");
-      // MULTI-LEADER: the agent decrypts each leader's signals with the license that leader minted to
-      // it. Discover those licenses by the CDR wallet's holdings (seeded with any configured one).
-      const cdrAddress = privateKeyToAccount(cfg.cdrKey).address;
-      this.licenses = new LicenseDiscovery({
-        storyRpcUrl: cfg.storyRpcUrl,
-        owner: cdrAddress,
-        seed: cfg.operatorLicenseTokenId !== undefined ? [cfg.operatorLicenseTokenId] : [],
-      });
-      const licenses = this.licenses;
-      this.cdr = new RealCdr({
-        privateKey: cfg.cdrKey,
-        rpcUrl: cfg.storyRpcUrl,
-        apiUrl: cfg.storyApiUrl,
-        getLicenseTokenIds: () => licenses.get(),
-      });
-    }
+    // CONFIDENTIAL SIGNAL PATH: every signal is CDR threshold-encrypted on Story. MULTI-LEADER: each
+    // leader mints an operator license to the agent's CDR wallet; we discover those licenses from the
+    // wallet's holdings (seeded with any configured one) and present them on decrypt so the on-chain
+    // read condition matches the right one per vault.
+    const cdrAddress = privateKeyToAccount(cfg.cdrKey).address;
+    this.licenses = new LicenseDiscovery({
+      storyRpcUrl: cfg.storyRpcUrl,
+      owner: cdrAddress,
+      seed: cfg.operatorLicenseTokenId !== undefined ? [cfg.operatorLicenseTokenId] : [],
+    });
+    const licenses = this.licenses;
+    this.cdr = new RealCdr({
+      privateKey: cfg.cdrKey,
+      rpcUrl: cfg.storyRpcUrl,
+      apiUrl: cfg.storyApiUrl,
+      getLicenseTokenIds: () => licenses.get(),
+    });
     // EXECUTION VENUES: a signal now carries its own `venue`, so we build EVERY venue this agent is
     // configured for and route per-signal. Hyperliquid builds when its per-trade cap is set (or it's the
     // default venue); Arbitrum builds when its RPC + factory are present. At least one is required.
@@ -121,10 +116,8 @@ export class Agent {
 
   /** Boot: discover held licenses, restore non-secret state + re-derive secret TP/SL, start monitor. */
   async start(): Promise<void> {
-    if (this.licenses) {
-      const tokenIds = await this.licenses.refresh();
-      this.logger.info("licenses_discovered", { count: String(tokenIds.length) });
-    }
+    const tokenIds = await this.licenses.refresh();
+    this.logger.info("licenses_discovered", { count: String(tokenIds.length) });
     const { restored, dropped } = await this.store.reconcile(this.cdr);
     this.logger.info("reconciled", { restored: String(restored), dropped: String(dropped) });
     this.monitor.start();
@@ -141,7 +134,7 @@ export class Agent {
   /** Process one signal vault (the demo trigger; production swaps this for an event watcher). */
   async processSignal(uuid: number): Promise<void> {
     // Pick up any license a leader minted to us since boot, so we can decrypt their fresh vault.
-    await this.licenses?.refresh();
+    await this.licenses.refresh();
     await this.pipeline.processSignal(uuid);
     await this.store.persist();
   }

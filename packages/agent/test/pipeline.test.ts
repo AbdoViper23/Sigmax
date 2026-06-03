@@ -1,17 +1,16 @@
 import { describe, it, expect } from "vitest";
 import type { Hex } from "viem";
-import { MockCdr } from "@sigmax/cdr";
 import { SignalPipeline } from "../src/pipeline.js";
 import { PositionStore } from "../src/state.js";
 import { AgentLogger } from "../src/logger.js";
-import { FakeExecutor, FakeSubscribers, makeSignal } from "./helpers.js";
+import { FakeCdr, FakeExecutor, FakeSubscribers, makeSignal } from "./helpers.js";
 
 const A = "0x00000000000000000000000000000000000000aa" as Hex;
 const B = "0x00000000000000000000000000000000000000bb" as Hex;
 
 function deps(opts: { executor: FakeExecutor; subscribers: FakeSubscribers; store?: PositionStore }) {
   return {
-    cdr: new MockCdr({ hasLicense: true }),
+    cdr: new FakeCdr(),
     executorFor: () => opts.executor,
     subscribers: opts.subscribers,
     store: opts.store ?? new PositionStore(),
@@ -20,7 +19,7 @@ function deps(opts: { executor: FakeExecutor; subscribers: FakeSubscribers; stor
   };
 }
 
-async function publish(cdr: MockCdr, signal = makeSignal()) {
+async function publish(cdr: FakeCdr, signal = makeSignal()) {
   const { uuid } = await cdr.publishSignal(signal);
   return uuid;
 }
@@ -112,7 +111,7 @@ describe("SignalPipeline — venue routing", () => {
     const arb = new FakeExecutor();
     const hl = new FakeExecutor();
     const d = {
-      cdr: new MockCdr({ hasLicense: true }),
+      cdr: new FakeCdr(),
       executorFor: (v: "arbitrum" | "hyperliquid") => (v === "hyperliquid" ? hl : arb),
       subscribers: new FakeSubscribers([A]),
       store: new PositionStore(),
@@ -132,7 +131,7 @@ describe("SignalPipeline — venue routing", () => {
   it("skips (does not crash) when the signal's venue isn't configured", async () => {
     const arb = new FakeExecutor();
     const d = {
-      cdr: new MockCdr({ hasLicense: true }),
+      cdr: new FakeCdr(),
       executorFor: (v: "arbitrum" | "hyperliquid") => {
         if (v !== "arbitrum") throw new Error(`venue_not_configured: ${v}`);
         return arb;

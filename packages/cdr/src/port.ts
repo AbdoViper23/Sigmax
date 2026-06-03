@@ -1,11 +1,9 @@
 import type { Signal } from "@sigmax/shared";
 
 /**
- * The CDR boundary Sigmax depends on. One interface, two implementations:
- * - `RealCdr`  — wraps @piplabs/cdr-sdk (threshold encryption on Story Aeneid).
- * - `MockCdr`  — deterministic, no creds; simulates the license read-gate for tests/demo continuity.
- *
- * Wrapping the SDK here means version churn touches one file (doc 02 §3 / 20).
+ * The CDR boundary Sigmax depends on, implemented by `RealCdr` — a wrapper over @piplabs/cdr-sdk
+ * (threshold encryption on Story Aeneid). Wrapping the SDK here means version churn touches one
+ * file (doc 02 §3 / 20). Tests use an in-memory `FakeCdr` double (packages/agent/test/helpers.ts).
  */
 export interface CdrPort {
   /** Encrypt + publish a signal; returns the on-chain vault id. */

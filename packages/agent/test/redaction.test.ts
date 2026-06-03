@@ -2,12 +2,11 @@ import { describe, it, expect } from "vitest";
 import { readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { MockCdr } from "@sigmax/cdr";
 import { SignalPipeline } from "../src/pipeline.js";
 import { TpSlMonitor } from "../src/tpsl.js";
 import { PositionStore } from "../src/state.js";
 import { AgentLogger } from "../src/logger.js";
-import { FakeExecutor, FakePrice, FakeSubscribers, recordingSink, makeSignal, TP, SL } from "./helpers.js";
+import { FakeCdr, FakeExecutor, FakePrice, FakeSubscribers, recordingSink, makeSignal, TP, SL } from "./helpers.js";
 
 const FOLLOWER = "0x00000000000000000000000000000000000000aa" as `0x${string}`;
 
@@ -20,7 +19,7 @@ describe("redaction — TP/SL never leak through logs or state", () => {
     const statePath = join(tmpdir(), `sigmax-redaction-${process.pid}.json`);
     const { lines, sink } = recordingSink();
     const logger = new AgentLogger(sink);
-    const cdr = new MockCdr({ hasLicense: true });
+    const cdr = new FakeCdr();
     const executor = new FakeExecutor();
     const store = new PositionStore(statePath);
 

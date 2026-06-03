@@ -13,9 +13,9 @@ export const AgentConfigSchema = z
   .object({
     // keys
     agentPk: hex, // AGENT_PK — executor key (bounded executeSwap / HL spot order only; never withdraws)
-    cdrKey: hex.optional(), // CDR_KEY — decrypt key (holds the operator license); required when cdrMode=real
+    cdrKey: hex, // CDR_KEY — decrypt key; holds the operator license(s) the agent decrypts with
     // endpoints
-    storyApiUrl: z.string().url().optional(), // Story-API REST base for CDR DKG partials; required when cdrMode=real
+    storyApiUrl: z.string().url(), // Story-API REST base for CDR DKG partials (threshold decryption)
     storyRpcUrl: z.string().url(), // Story L1 RPC (SubscriptionRegistry reads)
     // Arbitrum-only: forked Arbitrum RPC (anvil) — swaps execute here. Optional so the Hyperliquid
     // venue doesn't require Arbitrum wiring; required when executionVenue === "arbitrum" (see refine).
@@ -46,9 +46,6 @@ export const AgentConfigSchema = z
     // Maps a signal's EVM-style token address -> the HL spot coin symbol (e.g. {"0x..":"HYPE"}).
     // HL spot has no ERC-20 addresses, so the agent translates Hex tokens to HL coins via this map.
     hyperliquidTokens: z.record(z.string(), z.string()).optional(), // HYPERLIQUID_TOKENS (JSON)
-    // SIGNAL PATH: "real" decrypts via CDR on Story (the product); "mock" uses an in-memory CDR so the
-    // execution loop runs without Story-API / licenses (Stage A demo). CDR_MODE.
-    cdrMode: z.enum(["real", "mock"]).default("real"),
     // DEMO-ONLY: treat every address in `followers` as an active subscriber, bypassing the on-chain
     // SubscriptionRegistry.isActive check. Default OFF — production must use real subscriptions.
     trustConfiguredFollowers: z
@@ -65,13 +62,6 @@ export const AgentConfigSchema = z
     webOrigin: z.string().default("http://localhost:5173,http://localhost:8080"),
   })
   .superRefine((cfg, ctx) => {
-    // Real CDR needs the decrypt key + Story-API; mock CDR (Stage A demo) needs neither.
-    if (cfg.cdrMode === "real") {
-      if (!cfg.cdrKey)
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["cdrKey"], message: "required when cdrMode=real" });
-      if (!cfg.storyApiUrl)
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["storyApiUrl"], message: "required when cdrMode=real" });
-    }
     if (cfg.executionVenue === "arbitrum") {
       if (!cfg.liquidityRpcUrl)
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["liquidityRpcUrl"], message: "required when executionVenue=arbitrum" });
@@ -87,7 +77,7 @@ export const AgentConfigSchema = z
 
 export type AgentConfig = z.infer<typeof AgentConfigSchema> & {
   agentPk: Hex;
-  cdrKey?: Hex;
+  cdrKey: Hex;
   registryAddress: Hex;
   factoryAddress?: Hex;
   strategyIpId?: Hex;
@@ -113,7 +103,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AgentConfig {
     hyperliquidAgentPk: env.HYPERLIQUID_AGENT_PK,
     hyperliquidPerTradeCap: env.HYPERLIQUID_PER_TRADE_CAP,
     hyperliquidTokens: env.HYPERLIQUID_TOKENS ? JSON.parse(env.HYPERLIQUID_TOKENS) : undefined,
-    cdrMode: env.CDR_MODE,
     trustConfiguredFollowers: env.TRUST_CONFIGURED_FOLLOWERS,
     followers: env.FOLLOWERS ? env.FOLLOWERS.split(",").map((s: string) => s.trim()) : undefined,
     pollMs: env.POLL_MS,
