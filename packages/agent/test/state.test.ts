@@ -22,6 +22,7 @@ describe("PositionStore — persistence excludes secrets, reconcile re-derives t
     const pos: OpenPosition = {
       signalId: "sig-1",
       uuid,
+      venue: "arbitrum",
       follower: FOLLOWER,
       vault: VAULT,
       token: WETH,

@@ -38,10 +38,11 @@ async function main(): Promise<void> {
     version: 1,
     signalId: randomUUID(),
     strategyId: env("STRATEGY_IP_ID"),
-    chainId: Number(env("HL_CHAIN_ID", "998")), // cosmetic; the agent maps the token via HYPERLIQUID_TOKENS
+    chainId: Number(env("HL_CHAIN_ID", "998")), // cosmetic on HL; the venue field drives routing
+    venue: env("HL_VENUE", "hyperliquid"),
     action,
-    token: env("HL_TOKEN"),
-    quoteToken: env("HL_QUOTE"),
+    token: env("HL_TOKEN", "HYPE"), // HL: spot coin SYMBOL (e.g. HYPE); arbitrum: an EVM address
+    quoteToken: env("HL_QUOTE", "USDC"), // HL: "USDC"; arbitrum: the USDC address
     sizeBps: Number(env("HL_SIZE_BPS", "5000")),
     maxEntryPrice: scalePrice(env("HL_MAX_ENTRY", "0")), // 0 = market, else limit cap
     takeProfitPrice: scalePrice(env("HL_TP", "0")),

@@ -28,7 +28,7 @@ describe("redaction — TP/SL never leak through logs or state", () => {
 
     const pipeline = new SignalPipeline({
       cdr,
-      executor,
+      executorFor: () => executor,
       subscribers: new FakeSubscribers([FOLLOWER]),
       store,
       logger,
@@ -37,8 +37,8 @@ describe("redaction — TP/SL never leak through logs or state", () => {
     await pipeline.processSignal(uuid);
 
     const monitor = new TpSlMonitor({
-      executor,
-      price: new FakePrice(310_000_000_000n), // above TP → exit fires
+      executorFor: () => executor,
+      priceFor: () => new FakePrice(310_000_000_000n), // above TP → exit fires
       store,
       logger,
       pollMs: 1000,

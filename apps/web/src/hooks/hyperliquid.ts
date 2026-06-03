@@ -6,6 +6,12 @@ import { ExchangeClient, HttpTransport, InfoClient } from "@nktkas/hyperliquid";
 import type { AbstractWallet } from "@nktkas/hyperliquid/signing";
 import { env } from "@/lib/env";
 import type { PositionRow } from "@/components/sigmax/PositionsTable";
+import {
+  buildMarkets,
+  type MarketInfo,
+  type SpotMetaRaw,
+  type SpotAssetCtx,
+} from "@/lib/hyperliquid/markets";
 
 /**
  * Hyperliquid copy-trading hooks (the abstracted follower experience). Reads use a wallet-less
@@ -52,6 +58,26 @@ export function useAgentApproval(address?: Address) {
     },
   });
   return { approved: q.data ?? false, loading: q.isLoading, refetch: q.refetch };
+}
+
+/**
+ * The FULL Hyperliquid spot market list as "BASE/QUOTE" pairs, built exactly like the Menese reference
+ * (spotMetaAndAssetCtxs → buildMarkets). No quote filter — every pair. Wallet-less, cached 5 min.
+ * Callers filter (by quote tab) + sort (by 24h volume) at render time, like the reference's selector.
+ */
+export function useHlMarkets() {
+  const q = useQuery({
+    queryKey: ["hl-markets", env.hlTestnet],
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<MarketInfo[]> => {
+      const [meta, ctxs] = (await infoClient().spotMetaAndAssetCtxs()) as unknown as [
+        SpotMetaRaw,
+        SpotAssetCtx[],
+      ];
+      return buildMarkets(meta, ctxs);
+    },
+  });
+  return { markets: q.data ?? [], loading: q.isLoading };
 }
 
 interface HlFill {

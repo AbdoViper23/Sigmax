@@ -12,7 +12,7 @@ const B = "0x00000000000000000000000000000000000000bb" as Hex;
 function deps(opts: { executor: FakeExecutor; subscribers: FakeSubscribers; store?: PositionStore }) {
   return {
     cdr: new MockCdr({ hasLicense: true }),
-    executor: opts.executor,
+    executorFor: () => opts.executor,
     subscribers: opts.subscribers,
     store: opts.store ?? new PositionStore(),
     logger: new AgentLogger(() => {}),
@@ -90,6 +90,7 @@ describe("SignalPipeline — per-follower idempotency", () => {
     store.open({
       signalId: "11111111-2222-3333-4444-555555555555",
       uuid,
+      venue: "arbitrum",
       follower: A,
       vault,
       token: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1" as Hex,
@@ -103,6 +104,49 @@ describe("SignalPipeline — per-follower idempotency", () => {
 
     await new SignalPipeline(d).processSignal(uuid);
     expect(executor.swaps).toHaveLength(0); // already-open → no second entry
+  });
+});
+
+describe("SignalPipeline — venue routing", () => {
+  it("routes a signal to the executor for its venue", async () => {
+    const arb = new FakeExecutor();
+    const hl = new FakeExecutor();
+    const d = {
+      cdr: new MockCdr({ hasLicense: true }),
+      executorFor: (v: "arbitrum" | "hyperliquid") => (v === "hyperliquid" ? hl : arb),
+      subscribers: new FakeSubscribers([A]),
+      store: new PositionStore(),
+      logger: new AgentLogger(() => {}),
+      defaultSlippageBps: 100,
+    };
+    // An HL signal carries a coin symbol; route must hit the HL executor only.
+    const uuid = await publish(d.cdr, makeSignal({ venue: "hyperliquid", token: "HYPE", quoteToken: "USDC" }));
+
+    await new SignalPipeline(d).processSignal(uuid);
+
+    expect(hl.swaps).toHaveLength(1);
+    expect(arb.swaps).toHaveLength(0);
+    expect(d.store.all()[0]?.venue).toBe("hyperliquid");
+  });
+
+  it("skips (does not crash) when the signal's venue isn't configured", async () => {
+    const arb = new FakeExecutor();
+    const d = {
+      cdr: new MockCdr({ hasLicense: true }),
+      executorFor: (v: "arbitrum" | "hyperliquid") => {
+        if (v !== "arbitrum") throw new Error(`venue_not_configured: ${v}`);
+        return arb;
+      },
+      subscribers: new FakeSubscribers([A]),
+      store: new PositionStore(),
+      logger: new AgentLogger(() => {}),
+      defaultSlippageBps: 100,
+    };
+    const uuid = await publish(d.cdr, makeSignal({ venue: "hyperliquid", token: "HYPE", quoteToken: "USDC" }));
+
+    await expect(new SignalPipeline(d).processSignal(uuid)).resolves.toBeUndefined();
+    expect(arb.swaps).toHaveLength(0);
+    expect(d.store.all()).toHaveLength(0);
   });
 });
 

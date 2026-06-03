@@ -76,8 +76,8 @@ export const AgentConfigSchema = z
       if (!cfg.factoryAddress)
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["factoryAddress"], message: "required when executionVenue=arbitrum" });
     } else {
-      if (!cfg.hyperliquidTokens || Object.keys(cfg.hyperliquidTokens).length === 0)
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["hyperliquidTokens"], message: "required when executionVenue=hyperliquid" });
+      // HYPERLIQUID_TOKENS is now OPTIONAL: signals carry the spot coin symbol directly, so the agent
+      // resolves any coin live from spotMeta. The map remains as an optional legacy address→symbol override.
       if (cfg.hyperliquidPerTradeCap === undefined)
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["hyperliquidPerTradeCap"], message: "required when executionVenue=hyperliquid" });
     }

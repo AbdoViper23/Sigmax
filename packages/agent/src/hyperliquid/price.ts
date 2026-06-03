@@ -1,11 +1,10 @@
-import type { Hex } from "viem";
 import { HttpTransport, InfoClient } from "@nktkas/hyperliquid";
 import type { PriceSource } from "../ports.js";
 import { normalizeSpotMeta, numberToUnits, resolvePair, type SpotMeta } from "./meta.js";
 
 export interface HyperliquidPriceSourceConfig {
   testnet: boolean;
-  /** Same token map the executor uses: EVM-style token address (any case) -> HL spot coin symbol. */
+  /** Optional legacy override the executor also uses: EVM-style token address -> HL spot coin symbol. */
   tokens: Record<string, string>;
   /** Reference/quote coin the TP/SL thresholds are denominated in (default "USDC"). */
   quoteCoin?: string;
@@ -29,12 +28,14 @@ export class HyperliquidPriceSource implements PriceSource {
     this.quoteCoin = cfg.quoteCoin ?? "USDC";
   }
 
-  /** Spot mid of `token` in quote-coin terms, scaled to PRICE_SCALE (1e8). Throws if unmapped/unpriced. */
-  async getPrice(token: Hex): Promise<bigint> {
-    const coin = this.tokens[token.toLowerCase()];
-    if (!coin) throw new Error(`hyperliquid: no HL coin mapped for token ${token} (set HYPERLIQUID_TOKENS)`);
+  /** Spot mid of `token` in `quoteToken` terms, scaled to PRICE_SCALE (1e8). Throws if unpriced. */
+  async getPrice(token: string, quoteToken?: string): Promise<bigint> {
+    // Signals carry the coin symbol directly; the `tokens` map is an optional legacy address override.
+    const coin = this.tokens[token.toLowerCase()] ?? token;
+    // Price in the position's own quote (e.g. a HYPE/USDC TP is in USDC); fall back to the default quote.
+    const quote = quoteToken ? (this.tokens[quoteToken.toLowerCase()] ?? quoteToken) : this.quoteCoin;
     const meta = await this.meta();
-    const pair = resolvePair(meta, coin, this.quoteCoin);
+    const pair = resolvePair(meta, coin, quote);
     const mids = await this.info.allMids();
     const midStr = mids[pair.midsKey] ?? mids[pair.pairName];
     if (!midStr) throw new Error(`hyperliquid: no mid price for ${pair.pairName}`);

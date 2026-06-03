@@ -15,6 +15,7 @@ export function makeSignal(overrides: Partial<Signal> = {}): Signal {
     signalId: "11111111-2222-3333-4444-555555555555",
     strategyId: STRATEGY,
     chainId: 42161,
+    venue: "arbitrum", // these fixtures use EVM addresses; HL-specific tests override venue + token
     action: "ENTRY",
     token: WETH,
     quoteToken: USDC,
@@ -29,8 +30,8 @@ export function makeSignal(overrides: Partial<Signal> = {}): Signal {
 
 export interface SwapCall {
   vault: Hex;
-  tokenIn: Hex;
-  tokenOut: Hex;
+  tokenIn: string;
+  tokenOut: string;
   amountIn: bigint;
 }
 
@@ -55,7 +56,7 @@ export class FakeExecutor implements Executor {
   async perTradeCap(): Promise<bigint> {
     return this.opts.cap ?? 1_000_000_000n;
   }
-  async quoteAndSwap(a: { vault: Hex; tokenIn: Hex; tokenOut: Hex; amountIn: bigint }): Promise<{ txHash: Hex; received: bigint }> {
+  async quoteAndSwap(a: { vault: Hex; tokenIn: string; tokenOut: string; amountIn: bigint }): Promise<{ txHash: Hex; received: bigint }> {
     if (this.opts.throwForVault?.(a.vault)) throw new Error("swap reverted");
     this.swaps.push({ vault: a.vault, tokenIn: a.tokenIn, tokenOut: a.tokenOut, amountIn: a.amountIn });
     return { txHash: ("0x" + "cd".repeat(32)) as Hex, received: this.opts.received ? this.opts.received(a.amountIn) : a.amountIn / 2n };

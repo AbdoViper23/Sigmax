@@ -66,9 +66,9 @@ export class ZeroExExecutor implements Executor {
     });
   }
 
-  async balanceOf(vault: Hex, token: Hex): Promise<bigint> {
+  async balanceOf(vault: Hex, token: string): Promise<bigint> {
     return this.publicClient.readContract({
-      address: token,
+      address: token as Hex, // arbitrum tokens are EVM addresses (validated upstream by the signal schema)
       abi: ERC20_ABI,
       functionName: "balanceOf",
       args: [vault],
@@ -85,8 +85,8 @@ export class ZeroExExecutor implements Executor {
 
   private async quote(args: {
     vault: Hex;
-    tokenIn: Hex;
-    tokenOut: Hex;
+    tokenIn: string;
+    tokenOut: string;
     amountIn: bigint;
     slippageBps: number;
   }): Promise<{ router: Hex; swapData: Hex; minOut: bigint }> {
@@ -114,8 +114,8 @@ export class ZeroExExecutor implements Executor {
 
   async quoteAndSwap(args: {
     vault: Hex;
-    tokenIn: Hex;
-    tokenOut: Hex;
+    tokenIn: string;
+    tokenOut: string;
     amountIn: bigint;
     slippageBps: number;
     // Accepted for interface parity with the HL venue; the 0x/Arbitrum path stays market-only for now
@@ -130,7 +130,7 @@ export class ZeroExExecutor implements Executor {
       address: args.vault,
       abi: COPY_VAULT_ABI,
       functionName: "executeSwap",
-      args: [args.tokenIn, args.amountIn, args.tokenOut, minOut, router, swapData],
+      args: [args.tokenIn as Hex, args.amountIn, args.tokenOut as Hex, minOut, router, swapData],
     });
     const txHash = await this.walletClient.writeContract(request);
     await this.publicClient.waitForTransactionReceipt({ hash: txHash });

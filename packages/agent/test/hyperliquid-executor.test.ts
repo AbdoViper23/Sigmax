@@ -2,17 +2,14 @@ import { describe, it, expect } from "vitest";
 import type { Hex } from "viem";
 import { HyperliquidExecutor } from "../src/hyperliquid/executor.js";
 
-const HYPE = "0x0000000000000000000000000000000000000001" as Hex;
-const USDC = "0x0000000000000000000000000000000000000002" as Hex;
-const UNKNOWN = "0x0000000000000000000000000000000000000099" as Hex;
 const AGENT_PK = ("0x" + "11".repeat(32)) as Hex;
 const FOLLOWER = "0x00000000000000000000000000000000000000aa" as Hex;
 
-function makeExecutor() {
+function makeExecutor(tokens: Record<string, string> = {}) {
   return new HyperliquidExecutor({
     agentPk: AGENT_PK,
     testnet: true,
-    tokens: { [HYPE.toLowerCase()]: "HYPE", [USDC.toLowerCase()]: "USDC" },
+    tokens, // optional legacy map; signals now carry the coin symbol directly
     perTradeCap: 1_500_000_000n, // $15 in 1e8 units
   });
 }
@@ -26,11 +23,12 @@ describe("HyperliquidExecutor (non-custodial + spot-only shape)", () => {
     await expect(makeExecutor().perTradeCap(FOLLOWER)).resolves.toBe(1_500_000_000n);
   });
 
-  it("refuses to trade a token that isn't in the spot whitelist (before any network call)", async () => {
-    const ex = makeExecutor();
-    await expect(
-      ex.quoteAndSwap({ vault: FOLLOWER, tokenIn: USDC, tokenOut: UNKNOWN, amountIn: 50_000_000_000n, slippageBps: 100 }),
-    ).rejects.toThrow(/no HL coin mapped/);
+  it("needs no static token whitelist — coins resolve dynamically from spotMeta", () => {
+    // Constructing with an empty token map is valid now: HL signals carry the spot coin symbol and the
+    // executor resolves it live via spotMeta. Unknown-coin rejection is enforced by resolvePair and is
+    // unit-tested (network-free) in hyperliquid-meta.test.ts ("throws for an unknown token").
+    const ex = makeExecutor() as unknown as Record<string, unknown>;
+    expect(typeof ex.quoteAndSwap).toBe("function");
   });
 
   it("exposes no withdraw/transfer/perp surface (only the trade Executor port)", () => {

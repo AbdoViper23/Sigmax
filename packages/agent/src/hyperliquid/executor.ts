@@ -17,7 +17,8 @@ export interface HyperliquidExecutorConfig {
   agentPk: Hex;
   /** Use the Hyperliquid testnet API (the demo default). */
   testnet: boolean;
-  /** Maps a signal's EVM-style token address (any case) -> HL spot coin symbol, e.g. {"0x..":"HYPE"}. */
+  /** Optional legacy override: EVM-style token address (any case) -> HL spot coin symbol, e.g. {"0x..":"HYPE"}.
+   *  Signals now carry the coin symbol directly, so this is usually empty. */
   tokens: Record<string, string>;
   /** Per-trade cap in uniform 1e8 USD units (replaces the on-chain CopyVault cap). */
   perTradeCap: bigint;
@@ -54,7 +55,7 @@ export class HyperliquidExecutor implements Executor {
   }
 
   /** Available spot balance (`total - hold`) of `token` for `account`, in uniform 1e8 units. */
-  async balanceOf(account: Hex, token: Hex): Promise<bigint> {
+  async balanceOf(account: Hex, token: string): Promise<bigint> {
     const coin = this.coinFor(token);
     // ALWAYS query the master address (the funded account), never the agent address.
     const state = await this.info.spotClearinghouseState({ user: account });
@@ -80,13 +81,13 @@ export class HyperliquidExecutor implements Executor {
    */
   async quoteAndSwap(args: {
     vault: Hex;
-    tokenIn: Hex;
-    tokenOut: Hex;
+    tokenIn: string;
+    tokenOut: string;
     amountIn: bigint;
     slippageBps: number;
     maxEntryPrice?: bigint;
   }): Promise<{ txHash: Hex; received: bigint }> {
-    // Resolve coins from the whitelist FIRST so an unmapped token fails fast without any network call.
+    // Resolve coin symbols FIRST (cheap), then validate against live spotMeta below.
     const coinIn = this.coinFor(args.tokenIn);
     const coinOut = this.coinFor(args.tokenOut);
     const meta = await this.meta();
@@ -119,11 +120,14 @@ export class HyperliquidExecutor implements Executor {
     return { txHash: numberToHex(BigInt(fill!.oid)), received };
   }
 
-  /** Resolve a signal's EVM-style token address to its HL spot coin symbol (config-mapped). */
-  private coinFor(token: Hex): string {
-    const coin = this.tokens[token.toLowerCase()];
-    if (!coin) throw new Error(`hyperliquid: no HL coin mapped for token ${token} (set HYPERLIQUID_TOKENS)`);
-    return coin;
+  /**
+   * Resolve a signal's `token` to its HL spot coin symbol. HL signals now carry the symbol directly
+   * (e.g. "HYPE"), so we use it as-is; the optional `tokens` map is a legacy EVM-address→symbol
+   * override (kept for back-compat). The returned symbol is validated against live spotMeta in
+   * `resolvePair`/`findToken`, so an unknown coin still fails fast there.
+   */
+  private coinFor(token: string): string {
+    return this.tokens[token.toLowerCase()] ?? token;
   }
 
   /** Fetch + cache spotMeta, normalized to the pure-helper shape (decoupled from SDK tuple typing). */

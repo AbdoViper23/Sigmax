@@ -1,6 +1,6 @@
 import type { Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import type { Signal } from "@sigmax/shared";
+import type { Signal, SignalVenueT } from "@sigmax/shared";
 import { RealCdr, MockCdr, type CdrPort } from "@sigmax/cdr";
 import type { AgentConfig } from "./config.js";
 import { ZeroExExecutor } from "./executor.js";
@@ -51,34 +51,48 @@ export class Agent {
         getLicenseTokenIds: () => licenses.get(),
       });
     }
-    // EXECUTION VENUE: pick the Executor + PriceSource pair. Hyperliquid is additive — the Arbitrum
-    // CopyVault path is the default and is untouched. (config.ts enforces the required env per venue.)
-    let executor: Executor;
-    let price: PriceSource;
-    if (cfg.executionVenue === "hyperliquid") {
+    // EXECUTION VENUES: a signal now carries its own `venue`, so we build EVERY venue this agent is
+    // configured for and route per-signal. Hyperliquid builds when its per-trade cap is set (or it's the
+    // default venue); Arbitrum builds when its RPC + factory are present. At least one is required.
+    const executors: Partial<Record<SignalVenueT, Executor>> = {};
+    const prices: Partial<Record<SignalVenueT, PriceSource>> = {};
+
+    if (cfg.executionVenue === "hyperliquid" || cfg.hyperliquidPerTradeCap !== undefined) {
       const hlCfg = {
         testnet: cfg.hyperliquidTestnet,
-        tokens: cfg.hyperliquidTokens ?? {},
-        // hyperliquidPerTradeCap is required for this venue (config superRefine); fall back defensively.
+        tokens: cfg.hyperliquidTokens ?? {}, // optional legacy address→symbol override; symbols resolve live
         perTradeCap: cfg.hyperliquidPerTradeCap ?? 0n,
       };
       // The HL agent key signs orders; falls back to AGENT_PK if a dedicated key isn't set.
-      executor = new HyperliquidExecutor({ agentPk: cfg.hyperliquidAgentPk ?? cfg.agentPk, ...hlCfg });
-      price = new HyperliquidPriceSource(hlCfg);
-    } else {
-      // config.ts guarantees these are present when executionVenue === "arbitrum"; assert for the type.
-      if (!cfg.liquidityRpcUrl || !cfg.factoryAddress) {
-        throw new Error("arbitrum venue requires LIQUIDITY_RPC_URL and FACTORY_ADDRESS");
-      }
-      executor = new ZeroExExecutor({
+      executors.hyperliquid = new HyperliquidExecutor({ agentPk: cfg.hyperliquidAgentPk ?? cfg.agentPk, ...hlCfg });
+      prices.hyperliquid = new HyperliquidPriceSource(hlCfg);
+    }
+    if (cfg.liquidityRpcUrl && cfg.factoryAddress) {
+      executors.arbitrum = new ZeroExExecutor({
         agentPk: cfg.agentPk,
         rpcUrl: cfg.liquidityRpcUrl,
         chainId: cfg.liquidityChainId,
         factoryAddress: cfg.factoryAddress,
         zeroExApiKey: cfg.zeroExApiKey,
       });
-      price = new ChainlinkPriceSource({ rpcUrl: cfg.liquidityRpcUrl, chainId: cfg.liquidityChainId });
+      prices.arbitrum = new ChainlinkPriceSource({ rpcUrl: cfg.liquidityRpcUrl, chainId: cfg.liquidityChainId });
     }
+    if (!executors.hyperliquid && !executors.arbitrum) {
+      throw new Error("no execution venue configured (set up hyperliquid and/or arbitrum)");
+    }
+
+    // Per-signal/per-position resolvers. A signal targeting a venue this agent isn't configured for
+    // throws `venue_not_configured`, which the pipeline/monitor catch per-item and log as a skip.
+    const executorFor = (v: SignalVenueT): Executor => {
+      const e = executors[v];
+      if (!e) throw new Error(`venue_not_configured: ${v}`);
+      return e;
+    };
+    const priceFor = (v: SignalVenueT): PriceSource => {
+      const p = prices[v];
+      if (!p) throw new Error(`venue_not_configured: ${v}`);
+      return p;
+    };
     const subscribers = new RegistrySubscriberSource({
       storyRpcUrl: cfg.storyRpcUrl,
       registryAddress: cfg.registryAddress,
@@ -88,7 +102,7 @@ export class Agent {
     this.store = new PositionStore(cfg.statePath);
     this.pipeline = new SignalPipeline({
       cdr: this.cdr,
-      executor,
+      executorFor,
       subscribers,
       store: this.store,
       logger,
@@ -96,8 +110,8 @@ export class Agent {
       persist: () => this.store.persist(), // per-follower durability against mid-fan-out crashes
     });
     this.monitor = new TpSlMonitor({
-      executor,
-      price,
+      executorFor,
+      priceFor,
       store: this.store,
       logger,
       pollMs: cfg.pollMs,

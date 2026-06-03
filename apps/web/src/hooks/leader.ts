@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { formatUnits, parseUnits, zeroAddress, type Hex } from "viem";
 import { env } from "@/lib/env";
 import { SUBSCRIPTION_REGISTRY_ABI } from "@/lib/abis";
-import { PRICE_SCALE, type Signal } from "@sigmax/shared";
+import { PRICE_SCALE, type Signal, type SignalVenueT } from "@sigmax/shared";
 
 const WIP_DECIMALS = 18;
 const STORY = env.storyChainId;
@@ -11,7 +11,9 @@ const STORY = env.storyChainId;
 /** Form shape emitted by PublishSignalForm. */
 export interface PublishForm {
   action: "ENTRY" | "EXIT";
-  token: string;
+  venue: SignalVenueT;
+  token: string; // arbitrum: an EVM address; hyperliquid: the RAW base token name (e.g. "USOL")
+  quoteToken?: string; // hyperliquid: the RAW quote token name (e.g. "USDC"); arbitrum: defaults to USDC
   sizePercent: number;
   maxEntryPrice?: string;
   takeProfitPrice?: string;
@@ -144,10 +146,12 @@ export function usePublishSignal(strategyIdArg?: Hex) {
       version: 1,
       signalId,
       strategyId: (strategyId ?? zeroAddress) as string,
-      chainId: env.liquidityChainId,
+      chainId: env.liquidityChainId, // cosmetic; `venue` drives execution routing
+      venue: form.venue,
       action: form.action,
+      // HL trades by raw token name (base + the market's real quote, e.g. "USOL"/"USDC"); Arbitrum by EVM address.
       token: form.token,
-      quoteToken: env.usdc as string,
+      quoteToken: form.venue === "hyperliquid" ? (form.quoteToken ?? "USDC") : (env.usdc as string),
       sizeBps: Math.round(form.sizePercent * 100),
       maxEntryPrice: scalePrice(form.maxEntryPrice),
       takeProfitPrice: scalePrice(form.takeProfitPrice),

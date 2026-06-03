@@ -10,28 +10,47 @@ const uintStr = z.string().regex(/^\d+$/, "must be a non-negative integer string
 export const SignalAction = z.enum(["ENTRY", "EXIT"]);
 export type SignalActionT = z.infer<typeof SignalAction>;
 
+/** Where the swap executes. arbitrum = ERC-20 swap in the follower's CopyVault; hyperliquid = HyperCore spot. */
+export const SignalVenue = z.enum(["arbitrum", "hyperliquid"]);
+export type SignalVenueT = z.infer<typeof SignalVenue>;
+
 /**
  * The structured spot signal.
  *
  * HARD RULE 1 (SPOT ONLY): there is intentionally NO leverage / short / margin / side field.
  * Adding one would break the spot-only invariant — reject any such field in review.
  * Keep the ABI-encoded size < 1024 bytes (the CDR on-chain payload limit on Aeneid).
+ *
+ * `token`/`quoteToken` are venue-dependent (see superRefine): on arbitrum they are EVM addresses;
+ * on hyperliquid they are spot coin SYMBOLS (e.g. "HYPE" / "USDC"), resolved live against spotMeta.
  */
-export const SignalSchema = z.object({
-  version: z.number().int().min(1).max(65535).default(1),
-  signalId: z.string().uuid(),
-  strategyId: z.string().regex(addressRe), // Story ipId (ERC-6551 address)
-  chainId: z.number().int().positive(),
-  action: SignalAction,
-  token: z.string().regex(addressRe), // target token: buy on ENTRY, sell on EXIT
-  quoteToken: z.string().regex(addressRe), // explicit reference token (e.g. USDC) — never implicit
-  sizeBps: z.number().int().min(1).max(10000).default(10000), // % of vault balance, in basis points
-  maxEntryPrice: uintStr.default("0"), // "0" = none
-  takeProfitPrice: uintStr.default("0"), // "0" = none
-  stopLossPrice: uintStr.default("0"), // "0" = none
-  issuedAt: z.number().int().nonnegative(),
-  expiresAt: z.number().int().nonnegative(),
-});
+export const SignalSchema = z
+  .object({
+    version: z.number().int().min(1).max(65535).default(1),
+    signalId: z.string().uuid(),
+    strategyId: z.string().regex(addressRe), // Story ipId (ERC-6551 address)
+    chainId: z.number().int().positive(),
+    venue: SignalVenue.default("hyperliquid"), // execution venue (per-signal)
+    action: SignalAction,
+    token: z.string().min(1), // target: buy on ENTRY, sell on EXIT (address on arbitrum, symbol on HL)
+    quoteToken: z.string().min(1), // explicit reference token (address on arbitrum, symbol on HL)
+    sizeBps: z.number().int().min(1).max(10000).default(10000), // % of vault balance, in basis points
+    maxEntryPrice: uintStr.default("0"), // "0" = none
+    takeProfitPrice: uintStr.default("0"), // "0" = none
+    stopLossPrice: uintStr.default("0"), // "0" = none
+    issuedAt: z.number().int().nonnegative(),
+    expiresAt: z.number().int().nonnegative(),
+  })
+  .superRefine((s, ctx) => {
+    // Arbitrum executes ERC-20 swaps → token/quoteToken MUST be EVM addresses. Hyperliquid trades
+    // spot markets by coin symbol → any non-empty symbol (validated live against spotMeta in the agent).
+    if (s.venue === "arbitrum") {
+      if (!addressRe.test(s.token))
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["token"], message: "arbitrum token must be an EVM address" });
+      if (!addressRe.test(s.quoteToken))
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["quoteToken"], message: "arbitrum quoteToken must be an EVM address" });
+    }
+  });
 export type Signal = z.infer<typeof SignalSchema>;
 
 const SIGNAL_ABI = [
@@ -39,9 +58,10 @@ const SIGNAL_ABI = [
   { type: "bytes16", name: "signalId" },
   { type: "address", name: "strategyId" },
   { type: "uint32", name: "chainId" },
+  { type: "uint8", name: "venue" },
   { type: "uint8", name: "action" },
-  { type: "address", name: "token" },
-  { type: "address", name: "quoteToken" },
+  { type: "string", name: "token" },
+  { type: "string", name: "quoteToken" },
   { type: "uint16", name: "sizeBps" },
   { type: "uint256", name: "maxEntryPrice" },
   { type: "uint256", name: "takeProfitPrice" },
@@ -67,9 +87,10 @@ export function encodeSignal(input: Signal): Hex {
     uuidToBytes16(s.signalId),
     s.strategyId as Hex,
     s.chainId,
+    s.venue === "arbitrum" ? 0 : 1,
     s.action === "ENTRY" ? 0 : 1,
-    s.token as Hex,
-    s.quoteToken as Hex,
+    s.token,
+    s.quoteToken,
     s.sizeBps,
     BigInt(s.maxEntryPrice),
     BigInt(s.takeProfitPrice),
@@ -87,14 +108,15 @@ export function decodeSignal(data: Hex): Signal {
     signalId: bytes16ToUuid(d[1]),
     strategyId: d[2],
     chainId: Number(d[3]),
-    action: Number(d[4]) === 0 ? "ENTRY" : "EXIT",
-    token: d[5],
-    quoteToken: d[6],
-    sizeBps: Number(d[7]),
-    maxEntryPrice: d[8].toString(),
-    takeProfitPrice: d[9].toString(),
-    stopLossPrice: d[10].toString(),
-    issuedAt: Number(d[11]),
-    expiresAt: Number(d[12]),
+    venue: Number(d[4]) === 0 ? "arbitrum" : "hyperliquid",
+    action: Number(d[5]) === 0 ? "ENTRY" : "EXIT",
+    token: d[6],
+    quoteToken: d[7],
+    sizeBps: Number(d[8]),
+    maxEntryPrice: d[9].toString(),
+    takeProfitPrice: d[10].toString(),
+    stopLossPrice: d[11].toString(),
+    issuedAt: Number(d[12]),
+    expiresAt: Number(d[13]),
   });
 }
