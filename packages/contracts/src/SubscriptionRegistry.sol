@@ -60,6 +60,7 @@ contract SubscriptionRegistry is ReentrancyGuard {
     event PlanActiveSet(address indexed strategyId, bool active);
     event MonthlyPriceSet(address indexed strategyId, uint256 monthlyPrice);
     event Subscribed(address indexed strategyId, address indexed subscriber, uint64 newExpiry, uint256 paid);
+    event SubscriptionCancelled(address indexed strategyId, address indexed subscriber);
 
     error PlanExists();
     error PlanMissing();
@@ -67,6 +68,7 @@ contract SubscriptionRegistry is ReentrancyGuard {
     error NotLeader();
     error FeeTooHigh();
     error ZeroAddress();
+    error NotSubscribed();
 
     modifier onlyLeader(address strategyId) {
         if (plans[strategyId].leader != msg.sender) revert NotLeader();
@@ -159,6 +161,18 @@ contract SubscriptionRegistry is ReentrancyGuard {
         }
 
         emit Subscribed(strategyId, msg.sender, newExpiry, price);
+    }
+
+    /// @notice Cancel your own subscription to a strategy, effective immediately. Sets expiry to 0
+    ///         so `isActive` returns false at once and the agent stops copying THIS leader (other
+    ///         subscriptions are untouched). No refund — the period is prepaid. Re-subscribing later
+    ///         starts a fresh PERIOD from that moment.
+    /// @param strategyId The strategy (IP Asset address) to stop copying.
+    function cancel(address strategyId) external {
+        Sub storage s = subs[strategyId][msg.sender];
+        if (s.expiry == 0) revert NotSubscribed();
+        s.expiry = 0;
+        emit SubscriptionCancelled(strategyId, msg.sender);
     }
 
     // ----- views (trusted by the agent + any read condition) -----

@@ -9,7 +9,7 @@ const links = [
   { to: "/", label: "Home" },
   { to: "/leaderboard", label: "Leaders" },
   { to: "/leader", label: "Become a leader" },
-  { to: "/follower", label: "Follower" },
+  { to: "/follower", label: "My subscriptions" },
 ] as const;
 
 export function Nav() {

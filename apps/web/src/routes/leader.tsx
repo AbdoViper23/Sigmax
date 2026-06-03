@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useAccount } from "wagmi";
 import type { Hex } from "viem";
@@ -87,6 +88,7 @@ function LockedPublish() {
 function LeaderLive() {
   const net = useNetwork();
   const { address } = useAccount();
+  const qc = useQueryClient();
   const { leaders } = useLeaders();
 
   // A leader's own strategy is the plan whose on-chain leader == the connected wallet.
@@ -123,6 +125,9 @@ function LeaderLive() {
             statusNote={STEP_TEXT[step]}
             onRegister={async (v) => {
               await register(v);
+              // Refresh the on-chain leader list so this page flips to "registered" immediately
+              // (otherwise the UI stays stale until a re-render).
+              await qc.invalidateQueries({ queryKey: ["leaders-onchain"] });
               toast.success(`Registered as "${v.displayName}"`);
             }}
           />

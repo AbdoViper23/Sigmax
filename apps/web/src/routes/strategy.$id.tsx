@@ -8,7 +8,7 @@ import { PositionsTable } from "@/components/sigmax/PositionsTable";
 import { NetworkSwitchPrompt } from "@/components/sigmax/NetworkSwitchPrompt";
 import { chainConfigReady, env } from "@/lib/env";
 import { useNetwork } from "@/hooks/useNetwork";
-import { useSubscription } from "@/hooks/follower";
+import { useCopyTrade } from "@/hooks/follower";
 import { useLeader } from "@/hooks/leaders";
 import { getPublishedSignals } from "@/lib/publishedSignals";
 import { mockLeaderPositions } from "@/lib/mock";
@@ -41,7 +41,7 @@ function StrategyPage() {
 
 function StrategyDetail({ leader, id }: { leader: Leader; id: string }) {
   const net = useNetwork();
-  const sub = useSubscription(id as Hex);
+  const copy = useCopyTrade(id as Hex);
 
   // Real publish history recorded by this browser (non-secret metadata only — no TP/SL).
   const publishedSignals = getPublishedSignals(id).map((s) => ({
@@ -51,7 +51,7 @@ function StrategyDetail({ leader, id }: { leader: Leader; id: string }) {
   }));
 
   // Plan price comes from the registry read; fall back to the leader's PlanCreated price.
-  const priceWip = Number(sub.monthlyPriceWip) > 0 ? sub.monthlyPriceWip : leader.monthlyPriceWip;
+  const priceWip = Number(copy.monthlyPriceWip) > 0 ? copy.monthlyPriceWip : leader.monthlyPriceWip;
 
   const subscribeArea = (
     <NetworkSwitchPrompt
@@ -62,11 +62,12 @@ function StrategyDetail({ leader, id }: { leader: Leader; id: string }) {
       <SubscribeCard
         strategyName={leader.displayName}
         monthlyPriceWip={priceWip}
-        status={sub.status}
-        activeUntil={sub.activeUntil}
+        status={copy.active ? "active" : "idle"}
+        activeUntil={copy.activeUntil}
+        pendingLabel={copy.phase === "authorizing" ? "Authorizing…" : "Subscribing…"}
         onSubscribe={async () => {
-          await sub.subscribe();
-          toast.success(`Subscribed to ${leader.displayName}`);
+          await copy.start();
+          toast.success(`You're now copying ${leader.displayName}`);
         }}
       />
     </NetworkSwitchPrompt>

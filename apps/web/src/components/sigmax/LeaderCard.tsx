@@ -1,8 +1,12 @@
 import { Link } from "@tanstack/react-router";
-import { ArrowUpRight, ShieldCheck, Users } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
+import type { Hex } from "viem";
+import { ArrowUpRight, Check, Loader2, ShieldCheck, Users } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useCopyTrade } from "@/hooks/follower";
 import type { Leader } from "@/lib/leaders";
 
 /** Monogram seeded from the leader handle — same square-badge idiom as the Nav logo. */
@@ -73,14 +77,69 @@ export function LeaderCard({ leader }: { leader: Leader }) {
           </div>
         </div>
 
-        {/* CTA */}
-        <Button asChild className="mt-auto w-full">
-          <Link to="/strategy/$id" params={{ id: leader.id }}>
-            View &amp; subscribe
-            <ArrowUpRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
-          </Link>
-        </Button>
+        {/* CTA — one-click subscribe right here, plus a link to the full strategy page */}
+        <CardCta leader={leader} />
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * Quick subscribe directly from the card: one click runs the chained subscribe + agent-authorize
+ * (useCopyTrade). Shows a "Subscribed" state when already active so the leaderboard doubles as an
+ * at-a-glance view of who you're copying. The full strategy page stays one tap away.
+ */
+function CardCta({ leader }: { leader: Leader }) {
+  const copy = useCopyTrade(leader.id as Hex);
+  const [busy, setBusy] = useState(false);
+
+  if (copy.active) {
+    return (
+      <div className="mt-auto flex items-center gap-2">
+        <span className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md border border-success/30 bg-success/5 px-3 py-2 text-sm font-medium text-success">
+          <Check className="h-4 w-4" /> Subscribed
+        </span>
+        <Button asChild variant="outline">
+          <Link to="/strategy/$id" params={{ id: leader.id }} aria-label={`View ${leader.displayName}`}>
+            View
+          </Link>
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-auto flex items-center gap-2">
+      <Button
+        type="button"
+        className="flex-1"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          try {
+            await copy.start();
+            toast.success(`You're now copying ${leader.displayName}`);
+          } catch {
+            /* useCopyTrade already surfaced the error via toast */
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        {busy ? (
+          <>
+            <Loader2 className="h-4 w-4 animate-spin" /> Starting…
+          </>
+        ) : (
+          "Subscribe"
+        )}
+      </Button>
+      <Button asChild variant="outline">
+        <Link to="/strategy/$id" params={{ id: leader.id }} aria-label={`View ${leader.displayName}`}>
+          View
+          <ArrowUpRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+        </Link>
+      </Button>
+    </div>
   );
 }
