@@ -20,7 +20,7 @@ export function makeSignal(overrides: Partial<Signal> = {}): Signal {
     action: "ENTRY",
     token: WETH,
     quoteToken: USDC,
-    sizeBps: 5000,
+    sizeBps: 500,
     takeProfitPrice: TP,
     stopLossPrice: SL,
     issuedAt: 1_900_000_000,

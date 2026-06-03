@@ -1,7 +1,7 @@
 import type { Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import type { Signal, SignalVenueT } from "@sigmax/shared";
-import { RealCdr, type CdrPort } from "@sigmax/cdr";
+import { RealCdr, type CdrPort, type CdrPublishTxHashes } from "@sigmax/cdr";
 import type { AgentConfig } from "./config.js";
 import { ZeroExExecutor } from "./executor.js";
 import { ChainlinkPriceSource } from "./price.js";
@@ -125,9 +125,10 @@ export class Agent {
 
   /**
    * Encrypt + publish a signal to CDR (server-only; called by the HTTP publish endpoint). The
-   * plaintext signal stays in memory and is never logged. Returns the on-chain CDR vault uuid.
+   * plaintext signal stays in memory and is never logged. Returns the on-chain CDR vault uuid and the
+   * publish tx hashes (allocate + write) so the leader UI can link to the on-chain proof.
    */
-  async publishSignal(signal: Signal): Promise<{ uuid: number }> {
+  async publishSignal(signal: Signal): Promise<{ uuid: number; txHashes?: CdrPublishTxHashes }> {
     return this.cdr.publishSignal(signal);
   }
 

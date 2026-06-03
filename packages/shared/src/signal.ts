@@ -34,7 +34,7 @@ export const SignalSchema = z
     action: SignalAction,
     token: z.string().min(1), // target: buy on ENTRY, sell on EXIT (address on arbitrum, symbol on HL)
     quoteToken: z.string().min(1), // explicit reference token (address on arbitrum, symbol on HL)
-    sizeBps: z.number().int().min(1).max(10000).default(10000), // % of vault balance, in basis points
+    sizeBps: z.number().int().min(1).max(2000).default(500), // % of vault balance, in basis points (max 20%)
     maxEntryPrice: uintStr.default("0"), // "0" = none
     takeProfitPrice: uintStr.default("0"), // "0" = none
     stopLossPrice: uintStr.default("0"), // "0" = none

@@ -11,7 +11,7 @@ const base: Signal = SignalSchema.parse({
   action: "ENTRY",
   token: ARBITRUM_ADDRESSES.weth,
   quoteToken: ARBITRUM_ADDRESSES.usdc,
-  sizeBps: 5000,
+  sizeBps: 500,
   maxEntryPrice: "300000000000", // $3000 @ 1e8
   takeProfitPrice: "350000000000",
   stopLossPrice: "270000000000",
@@ -28,7 +28,7 @@ const hlBase: Signal = SignalSchema.parse({
   action: "ENTRY",
   token: "HYPE", // spot coin symbol, not an address
   quoteToken: "USDC",
-  sizeBps: 5000,
+  sizeBps: 500,
   maxEntryPrice: "0",
   takeProfitPrice: "350000000000",
   stopLossPrice: "270000000000",

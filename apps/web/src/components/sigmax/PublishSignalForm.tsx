@@ -30,7 +30,7 @@ import { Lock, ExternalLink, Check, ChevronsUpDown } from "lucide-react";
 export interface PublishSignalFormProps {
   tokenOptions: { symbol: string; address: string }[];
   publishing: boolean;
-  lastPublished?: { signalId: string; txUrl: string; at: string };
+  lastPublished?: { signalId: string; at: string; proofs: { label: string; url: string }[] };
   onPublish: (v: {
     action: "ENTRY" | "EXIT";
     venue: SignalVenueT;
@@ -51,7 +51,7 @@ const initialState = {
   orderType: "MARKET" as "MARKET" | "LIMIT",
   token: "", // arbitrum: address; hyperliquid: raw base token name (e.g. "USOL")
   quoteToken: "", // hyperliquid: raw quote token name (e.g. "USDC"); arbitrum: defaults to USDC
-  sizePercent: 100,
+  sizePercent: 5,
   maxEntryPrice: "",
   takeProfitPrice: "",
   stopLossPrice: "",
@@ -75,7 +75,7 @@ export function PublishSignalForm({
   function validate() {
     const e: Record<string, string> = {};
     if (!s.token) e.token = "Pick a token";
-    if (s.sizePercent < 1 || s.sizePercent > 100) e.sizePercent = "1–100%";
+    if (s.sizePercent < 1 || s.sizePercent > 20) e.sizePercent = "1–20%";
     for (const k of ["maxEntryPrice", "takeProfitPrice", "stopLossPrice"] as const) {
       if (s[k] && Number(s[k]) < 0) e[k] = "Must be ≥ 0";
     }
@@ -219,7 +219,7 @@ export function PublishSignalForm({
             value={[s.sizePercent]}
             onValueChange={(v) => setS({ ...s, sizePercent: v[0] })}
             min={1}
-            max={100}
+            max={20}
             step={1}
           />
         </div>
@@ -343,14 +343,21 @@ export function PublishSignalForm({
                 · {new Date(lastPublished.at).toLocaleTimeString()}
               </span>
             </span>
-            <a
-              href={lastPublished.txUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-            >
-              proof <ExternalLink className="h-3 w-3" />
-            </a>
+            {lastPublished.proofs.length > 0 && (
+              <div className="flex items-center gap-3">
+                {lastPublished.proofs.map((p) => (
+                  <a
+                    key={p.url}
+                    href={p.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    {p.label} <ExternalLink className="h-3 w-3" />
+                  </a>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </CardContent>

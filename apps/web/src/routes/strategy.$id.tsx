@@ -10,7 +10,7 @@ import { chainConfigReady, env } from "@/lib/env";
 import { useNetwork } from "@/hooks/useNetwork";
 import { useCopyTrade } from "@/hooks/follower";
 import { useLeader } from "@/hooks/leaders";
-import { getPublishedSignals } from "@/lib/publishedSignals";
+import { getPublishedSignals, signalProofs } from "@/lib/publishedSignals";
 import { mockLeaderPositions } from "@/lib/mock";
 import type { Leader } from "@/lib/leaders";
 
@@ -47,7 +47,7 @@ function StrategyDetail({ leader, id }: { leader: Leader; id: string }) {
   const publishedSignals = getPublishedSignals(id).map((s) => ({
     signalId: s.uuid !== undefined ? `CDR vault #${s.uuid}` : s.signalId,
     at: s.at,
-    txUrl: env.explorers.story,
+    proofs: signalProofs(s, env.explorers.story),
   }));
 
   // Plan price comes from the registry read; fall back to the leader's PlanCreated price.

@@ -139,7 +139,12 @@ export function usePublishSignal(strategyIdArg?: Hex) {
 
   const publish = async (
     form: PublishForm,
-  ): Promise<{ signalId: string; uuid?: number; at: string }> => {
+  ): Promise<{
+    signalId: string;
+    uuid?: number;
+    at: string;
+    txHashes?: { allocate: string; write: string };
+  }> => {
     const signalId = crypto.randomUUID();
     const issuedAt = Math.floor(Date.now() / 1000);
     const signal: Signal = {
@@ -174,8 +179,11 @@ export function usePublishSignal(strategyIdArg?: Hex) {
       body: JSON.stringify(signal),
     });
     if (!res.ok) throw new Error(`publish failed (${res.status})`);
-    const { uuid } = (await res.json()) as { uuid: number };
-    return { signalId, uuid, at: new Date().toISOString() };
+    const { uuid, txHashes } = (await res.json()) as {
+      uuid: number;
+      txHashes?: { allocate: string; write: string };
+    };
+    return { signalId, uuid, txHashes, at: new Date().toISOString() };
   };
 
   return { publish };

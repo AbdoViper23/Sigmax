@@ -99,14 +99,15 @@ async function handle(
     }
 
     try {
-      const { uuid } = await agent.publishSignal(signal);
+      const { uuid, txHashes } = await agent.publishSignal(signal);
       logger.signalReceived({
         uuid,
         strategyId: signal.strategyId,
         signalId: signal.signalId,
         action: signal.action,
       });
-      json(res, 200, { uuid });
+      // txHashes are public on-chain ids — safe to return so the leader UI can link to the proof.
+      json(res, 200, { uuid, txHashes });
       // Demo convenience: process immediately so the swap fans out. Fire-and-forget.
       void agent.processSignal(uuid).catch((err) =>
         logger.error({

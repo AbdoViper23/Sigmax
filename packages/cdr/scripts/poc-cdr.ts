@@ -24,7 +24,7 @@ const signal: Signal = SignalSchema.parse({
   action: "ENTRY",
   token: ARBITRUM_ADDRESSES.weth,
   quoteToken: ARBITRUM_ADDRESSES.usdc,
-  sizeBps: 5000,
+  sizeBps: 500,
   takeProfitPrice: "350000000000",
   stopLossPrice: "270000000000",
   issuedAt: Math.floor(Date.parse("2026-05-30T00:00:00Z") / 1000),

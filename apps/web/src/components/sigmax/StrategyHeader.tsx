@@ -11,7 +11,11 @@ export interface StrategyHeaderProps {
   winRatePct: number | null;
   maxDrawdownPct: number | null;
   subscribers: number;
-  publishedSignals: { signalId: string; at: string; txUrl: string }[];
+  publishedSignals: {
+    signalId: string;
+    at: string;
+    proofs: { label: string; url: string }[];
+  }[];
   flaggedForTesting?: boolean;
 }
 
@@ -114,14 +118,17 @@ export function StrategyHeader({
                   <span className="text-xs text-muted-foreground">
                     {new Date(s.at).toLocaleString()}
                   </span>
-                  <a
-                    href={s.txUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 text-xs hover:text-foreground"
-                  >
-                    proof <ExternalLink className="h-3 w-3" />
-                  </a>
+                  {s.proofs.map((p) => (
+                    <a
+                      key={p.url}
+                      href={p.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-xs hover:text-foreground"
+                    >
+                      {p.label} <ExternalLink className="h-3 w-3" />
+                    </a>
+                  ))}
                 </div>
               </li>
             ))}

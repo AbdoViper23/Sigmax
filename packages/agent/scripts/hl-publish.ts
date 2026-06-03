@@ -9,7 +9,7 @@
  * Run:
  *   AGENT_API_URL=http://localhost:8787 STRATEGY_IP_ID=0x… \
  *   HL_TOKEN=0x…(maps to an HL coin via HYPERLIQUID_TOKENS) HL_QUOTE=0x…(USDC) \
- *   HL_ACTION=ENTRY HL_SIZE_BPS=5000 HL_MAX_ENTRY=0 HL_TP=0 HL_SL=0 HL_EXPIRES_HOURS=24 \
+ *   HL_ACTION=ENTRY HL_SIZE_BPS=500 HL_MAX_ENTRY=0 HL_TP=0 HL_SL=0 HL_EXPIRES_HOURS=24 \
  *   pnpm --filter @sigmax/agent exec tsx scripts/hl-publish.ts
  */
 import { randomUUID } from "node:crypto";
@@ -43,7 +43,7 @@ async function main(): Promise<void> {
     action,
     token: env("HL_TOKEN", "HYPE"), // HL: spot coin SYMBOL (e.g. HYPE); arbitrum: an EVM address
     quoteToken: env("HL_QUOTE", "USDC"), // HL: "USDC"; arbitrum: the USDC address
-    sizeBps: Number(env("HL_SIZE_BPS", "5000")),
+    sizeBps: Number(env("HL_SIZE_BPS", "500")),
     maxEntryPrice: scalePrice(env("HL_MAX_ENTRY", "0")), // 0 = market, else limit cap
     takeProfitPrice: scalePrice(env("HL_TP", "0")),
     stopLossPrice: scalePrice(env("HL_SL", "0")),
