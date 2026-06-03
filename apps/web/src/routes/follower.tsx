@@ -77,8 +77,10 @@ function DashboardLive() {
   const { address } = useAccount();
   const { subs, loading } = useMySubscriptions();
   const bal = useHlBalance(address);
-  const positions = useHlPositions(address);
   const approval = useAgentApproval(address);
+  // Only the trades the agent placed — fills from when copy-trading was authorized onward, not the
+  // follower's own prior history. See useHlPositions / useAgentApproval.
+  const positions = useHlPositions(address, approval.copyTradingSince);
   const { revoke } = useRevokeAgent();
 
   return (
@@ -126,8 +128,10 @@ function DashboardLive() {
         )}
       </section>
 
-      {/* Recent copied trades (results only — never the strategy) */}
-      {positions.positions.length > 0 && (
+      {/* Recent copied trades (results only — never the strategy). Shown only once the agent is
+          authorized: before that no copy trade can exist, and we never surface the follower's own
+          manual history here. */}
+      {approval.approved && positions.positions.length > 0 && (
         <section className="space-y-3">
           <h2 className="text-sm font-medium text-muted-foreground">Recent copied trades</h2>
           <PositionsTable positions={positions.positions} loading={positions.loading} />

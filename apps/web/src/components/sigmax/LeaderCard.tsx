@@ -5,6 +5,7 @@ import type { Hex } from "viem";
 import { ArrowUpRight, Check, Loader2, ShieldCheck, Users } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { TestBadge } from "./TestBadge";
 import { cn } from "@/lib/utils";
 import { useCopyTrade } from "@/hooks/follower";
 import type { Leader } from "@/lib/leaders";
@@ -35,8 +36,14 @@ function Stat({ label, value, className }: { label: string; value: string; class
 
 export function LeaderCard({ leader }: { leader: Leader }) {
   const ret = leader.performance.verifiedReturnPct;
+  const test = leader.flaggedForTesting;
   return (
-    <Card className="group flex flex-col transition-colors hover:border-primary/40">
+    <Card
+      className={cn(
+        "group flex flex-col transition-colors hover:border-primary/40",
+        test && "border-dashed border-warning/40 hover:border-warning/60",
+      )}
+    >
       <CardContent className="flex flex-1 flex-col gap-4 pt-6">
         {/* Identity */}
         <div className="flex items-start gap-3">
@@ -44,10 +51,14 @@ export function LeaderCard({ leader }: { leader: Leader }) {
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
               <h3 className="truncate font-semibold tracking-tight">{leader.displayName}</h3>
-              <ShieldCheck
-                className="h-3.5 w-3.5 shrink-0 text-success"
-                aria-label="Verified track record"
-              />
+              {test ? (
+                <TestBadge withIcon={false} className="shrink-0" />
+              ) : (
+                <ShieldCheck
+                  className="h-3.5 w-3.5 shrink-0 text-success"
+                  aria-label="Verified track record"
+                />
+              )}
             </div>
             <p className="truncate text-xs text-muted-foreground">@{leader.username}</p>
           </div>
@@ -100,7 +111,11 @@ function CardCta({ leader }: { leader: Leader }) {
           <Check className="h-4 w-4" /> Subscribed
         </span>
         <Button asChild variant="outline">
-          <Link to="/strategy/$id" params={{ id: leader.id }} aria-label={`View ${leader.displayName}`}>
+          <Link
+            to="/strategy/$id"
+            params={{ id: leader.id }}
+            aria-label={`View ${leader.displayName}`}
+          >
             View
           </Link>
         </Button>
@@ -135,7 +150,11 @@ function CardCta({ leader }: { leader: Leader }) {
         )}
       </Button>
       <Button asChild variant="outline">
-        <Link to="/strategy/$id" params={{ id: leader.id }} aria-label={`View ${leader.displayName}`}>
+        <Link
+          to="/strategy/$id"
+          params={{ id: leader.id }}
+          aria-label={`View ${leader.displayName}`}
+        >
           View
           <ArrowUpRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
         </Link>

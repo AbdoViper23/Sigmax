@@ -22,6 +22,7 @@ import {
 
 const AGENT_LABEL = "sigmax"; // the agent "name" on Hyperliquid (used to replace/revoke later)
 const POLL_MS = 15_000;
+const APPROVAL_TTL_MS = 30 * 24 * 60 * 60 * 1000; // agent authorization lifetime (see useApproveAgent)
 
 // The SDK's accepted wallet type (viem account / wallet client / ethers signer).
 type HlWallet = AbstractWallet;
@@ -54,10 +55,23 @@ export function useAgentApproval(address?: Address) {
     queryFn: async () => {
       const agents = await infoClient().extraAgents({ user: address! });
       const target = env.hlAgentAddress!.toLowerCase();
-      return agents.some((a) => a.address.toLowerCase() === target && a.validUntil > Date.now());
+      const agent = agents.find(
+        (a) => a.address.toLowerCase() === target && a.validUntil > Date.now(),
+      );
+      // The agent is authorized for APPROVAL_TTL_MS, so it was approved at (validUntil − TTL). Copy
+      // trades can only exist from that moment on — used to filter the follower's fills.
+      return {
+        approved: Boolean(agent),
+        copyTradingSince: agent ? agent.validUntil - APPROVAL_TTL_MS : undefined,
+      };
     },
   });
-  return { approved: q.data ?? false, loading: q.isLoading, refetch: q.refetch };
+  return {
+    approved: q.data?.approved ?? false,
+    copyTradingSince: q.data?.copyTradingSince,
+    loading: q.isLoading,
+    refetch: q.refetch,
+  };
 }
 
 /**
@@ -92,14 +106,20 @@ interface HlFill {
   oid?: number;
 }
 
-/** The follower's recent copied trades, mapped to the shared PositionRow shape for PositionsTable. */
-export function useHlPositions(address?: Address) {
+/**
+ * The follower's recent COPIED trades, mapped to the shared PositionRow shape for PositionsTable.
+ * `userFills` returns every fill on the account — including the follower's own manual trades — so we
+ * keep only fills at/after `since` (the agent's authorization time). Before the agent was approved it
+ * couldn't have traded, so this cleanly excludes pre-existing history. `since` undefined → no filter.
+ */
+export function useHlPositions(address?: Address, since?: number) {
   const q = useQuery({
-    queryKey: ["hl-fills", address, env.hlTestnet],
+    queryKey: ["hl-fills", address, since, env.hlTestnet],
     enabled: Boolean(address),
     refetchInterval: POLL_MS,
     queryFn: async () => {
-      const fills = (await infoClient().userFills({ user: address! })) as unknown as HlFill[];
+      const all = (await infoClient().userFills({ user: address! })) as unknown as HlFill[];
+      const fills = since ? all.filter((f) => f.time >= since) : all;
       return fills.slice(0, 25).map((f, i): PositionRow => {
         const value = Number(f.sz) * Number(f.px);
         const pnl = f.closedPnl ? Number(f.closedPnl) : 0;
@@ -131,7 +151,7 @@ export function useApproveAgent() {
   const approve = async (): Promise<void> => {
     if (!walletClient) throw new Error("Connect your wallet first");
     if (!env.hlAgentAddress) throw new Error("Copy-trading agent is not configured");
-    const validUntil = Date.now() + 30 * 24 * 60 * 60 * 1000; // 30 days
+    const validUntil = Date.now() + APPROVAL_TTL_MS;
     await exchangeFrom(walletClient as unknown as HlWallet).approveAgent({
       agentAddress: env.hlAgentAddress,
       agentName: `${AGENT_LABEL} valid_until ${validUntil}`,

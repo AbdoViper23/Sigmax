@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { TestBadge } from "./TestBadge";
 import { cn } from "@/lib/utils";
 
 export interface LeaderboardRow {
@@ -11,6 +12,7 @@ export interface LeaderboardRow {
   winRatePct: number | null;
   maxDrawdownPct: number | null;
   subscribers: number;
+  flaggedForTesting?: boolean;
 }
 
 export interface LeaderboardTableProps {
@@ -63,7 +65,12 @@ export function LeaderboardTable({ rows, loading }: LeaderboardTableProps) {
             {rows.map((r, i) => (
               <tr key={r.id} className="border-b border-border/60 last:border-0">
                 <td className="py-3 font-mono text-muted-foreground">{i + 1}</td>
-                <td className="py-3 font-medium">{r.name}</td>
+                <td className="py-3 font-medium">
+                  <span className="inline-flex items-center gap-2">
+                    {r.name}
+                    {r.flaggedForTesting && <TestBadge withIcon={false} />}
+                  </span>
+                </td>
                 <td
                   className={cn(
                     "py-3 text-right font-mono tabular-nums",

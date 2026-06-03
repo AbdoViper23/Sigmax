@@ -60,7 +60,9 @@ export const AgentConfigSchema = z
     statePath: z.string().optional(), // optional JSON persist path for NON-secret position metadata
     // HTTP publish endpoint (leader UI POSTs signals here; CDR encryption is server-only)
     httpPort: z.coerce.number().int().positive().default(8787), // HTTP_PORT
-    webOrigin: z.string().default("http://localhost:5173"), // WEB_ORIGIN — CORS allow-origin for the web app
+    // WEB_ORIGIN — CORS allow-origin(s) for the web app. Comma-separated list; the server echoes the
+    // request's Origin when it matches. Defaults cover the common Vite dev ports (5173 and 8080).
+    webOrigin: z.string().default("http://localhost:5173,http://localhost:8080"),
   })
   .superRefine((cfg, ctx) => {
     // Real CDR needs the decrypt key + Story-API; mock CDR (Stage A demo) needs neither.
@@ -118,7 +120,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AgentConfig {
     defaultSlippageBps: env.DEFAULT_SLIPPAGE_BPS,
     statePath: env.STATE_PATH,
     httpPort: env.HTTP_PORT,
-    webOrigin: env.WEB_ORIGIN,
+    // Empty string wouldn't trigger the zod default — coerce blank to undefined so the default applies.
+    webOrigin: env.WEB_ORIGIN || undefined,
   });
   return parsed as AgentConfig;
 }

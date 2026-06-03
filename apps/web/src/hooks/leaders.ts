@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { formatUnits, type Address } from "viem";
 import { chainConfigReady, env } from "@/lib/env";
 import { COPY_VAULT_ABI, COPY_VAULT_FACTORY_ABI, SUBSCRIPTION_REGISTRY_ABI } from "@/lib/abis";
-import { mockLeaders } from "@/lib/mock";
+import { mockLeaders, testLeaders } from "@/lib/mock";
 import type { Leader, LeaderPerformance } from "@/lib/leaders";
 
 const STORY = env.storyChainId;
@@ -172,10 +172,12 @@ export function useLeaders(): { leaders: Leader[]; loading: boolean } {
     },
   });
 
+  // Seeded test leaders are always appended (flagged in the UI) so the marketplace + track-record
+  // views can be demoed even against a live deployment with no real leaders yet. See lib/mock.ts.
   // Mock fallback only when contracts aren't configured (keeps dev/SSR rendering).
-  if (!chainConfigReady) return { leaders: mockLeaders, loading: false };
+  if (!chainConfigReady) return { leaders: [...mockLeaders, ...testLeaders], loading: false };
 
-  return { leaders: q.data ?? [], loading: q.isLoading };
+  return { leaders: [...(q.data ?? []), ...testLeaders], loading: q.isLoading };
 }
 
 /** Resolve a single leader by strategy id (route param). Undefined when no such leader exists. */

@@ -76,7 +76,6 @@ export function PublishSignalForm({
     const e: Record<string, string> = {};
     if (!s.token) e.token = "Pick a token";
     if (s.sizePercent < 1 || s.sizePercent > 100) e.sizePercent = "1–100%";
-    if (s.slippagePercent < 0.1 || s.slippagePercent > 5) e.slippagePercent = "0.1–5%";
     for (const k of ["maxEntryPrice", "takeProfitPrice", "stopLossPrice"] as const) {
       if (s[k] && Number(s[k]) < 0) e[k] = "Must be ≥ 0";
     }
@@ -97,7 +96,8 @@ export function PublishSignalForm({
       quoteToken: s.venue === "hyperliquid" ? s.quoteToken || undefined : undefined,
       sizePercent: s.sizePercent,
       // MARKET → no price cap (fills now); LIMIT → the entry price cap.
-      maxEntryPrice: s.action === "ENTRY" && s.orderType === "LIMIT" ? s.maxEntryPrice || undefined : undefined,
+      maxEntryPrice:
+        s.action === "ENTRY" && s.orderType === "LIMIT" ? s.maxEntryPrice || undefined : undefined,
       takeProfitPrice: s.takeProfitPrice || undefined,
       stopLossPrice: s.stopLossPrice || undefined,
       slippagePercent: s.slippagePercent,
@@ -246,7 +246,9 @@ export function PublishSignalForm({
               ))}
             </div>
             {s.orderType === "MARKET" ? (
-              <p className="text-xs text-muted-foreground">Fills immediately at the current price.</p>
+              <p className="text-xs text-muted-foreground">
+                Fills immediately at the current price.
+              </p>
             ) : (
               <div className="space-y-1.5 pt-1">
                 <Label htmlFor="limit-price">Limit price (USD)</Label>
@@ -259,7 +261,9 @@ export function PublishSignalForm({
                   onChange={(e) => setS({ ...s, maxEntryPrice: e.target.value })}
                   placeholder="e.g. 70.00"
                 />
-                {errors.maxEntryPrice && <p className="text-xs text-danger">{errors.maxEntryPrice}</p>}
+                {errors.maxEntryPrice && (
+                  <p className="text-xs text-danger">{errors.maxEntryPrice}</p>
+                )}
               </div>
             )}
           </div>
@@ -361,14 +365,6 @@ const QUOTE_TABS: { id: string; label: string; matches: (q: string) => boolean }
   { id: "USDH", label: "USDH", matches: (q) => q === "USDH" },
 ];
 
-function formatVolume(v: number): string {
-  if (!isFinite(v) || v <= 0) return "";
-  if (v >= 1e9) return `$${(v / 1e9).toFixed(2)}B`;
-  if (v >= 1e6) return `$${(v / 1e6).toFixed(2)}M`;
-  if (v >= 1e3) return `$${(v / 1e3).toFixed(1)}K`;
-  return `$${v.toFixed(0)}`;
-}
-
 /**
  * Pair selector over EVERY Hyperliquid spot market, shown as "BASE/QUOTE" — a port of the reference's
  * PairSelectorModal: quote-token tabs, search, volume-sorted. Stores the selected market's raw base +
@@ -388,9 +384,9 @@ function HlPairCombobox({
   const [tab, setTab] = useState("ALL");
 
   const selected = markets.find((m) => m.baseToken === base && m.quoteToken === quote);
-  const triggerLabel =
-    selected?.displaySymbol ??
-    (base ? `${displayName(base)}/${displayName(quote)}` : loading ? "Loading markets…" : "Select market…");
+  const displayBase = selected?.displayBase ?? (base ? displayName(base) : "");
+  const displayQuote = selected?.displayQuote ?? (quote ? displayName(quote) : "");
+  const placeholder = loading ? "Loading markets…" : "Select market…";
 
   const list = markets
     .filter((m) => QUOTE_TABS.find((t) => t.id === tab)!.matches(m.quoteToken))
@@ -409,9 +405,16 @@ function HlPairCombobox({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="w-full justify-between font-normal"
+          className="h-10 w-full justify-between font-normal"
         >
-          {triggerLabel}
+          {base ? (
+            <span className="flex items-baseline gap-0.5">
+              <span className="font-medium text-foreground">{displayBase}</span>
+              <span className="text-muted-foreground">/{displayQuote}</span>
+            </span>
+          ) : (
+            <span className="text-muted-foreground">{placeholder}</span>
+          )}
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
@@ -423,8 +426,10 @@ function HlPairCombobox({
               type="button"
               onClick={() => setTab(t.id)}
               className={cn(
-                "rounded px-2 py-1 text-xs font-medium transition-colors",
-                tab === t.id ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground",
+                "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                tab === t.id
+                  ? "bg-foreground text-background"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
             >
               {t.label}
@@ -435,32 +440,34 @@ function HlPairCombobox({
           filter={(value, search) => (value.toLowerCase().includes(search.toLowerCase()) ? 1 : 0)}
         >
           <CommandInput placeholder="Search pairs…" />
-          <CommandList>
+          <CommandList className="max-h-72">
             <CommandEmpty>{loading ? "Loading…" : "No pairs found."}</CommandEmpty>
             <CommandGroup>
-              {list.map((m) => (
-                <CommandItem
-                  key={m.wsCoin}
-                  value={`${m.displaySymbol} ${m.baseToken}`} // search by ticker or raw name
-                  onSelect={() => {
-                    onSelect(m);
-                    setOpen(false);
-                  }}
-                >
-                  <Check
-                    className={cn(
-                      "mr-2 h-4 w-4",
-                      selected?.wsCoin === m.wsCoin ? "opacity-100" : "opacity-0",
-                    )}
-                  />
-                  <span className="flex-1">{m.displaySymbol}</span>
-                  {m.dayNtlVlm > 0 && (
-                    <span className="ml-2 font-mono text-xs text-muted-foreground">
-                      {formatVolume(m.dayNtlVlm)}
+              {list.map((m) => {
+                const active = selected?.wsCoin === m.wsCoin;
+                return (
+                  <CommandItem
+                    key={m.wsCoin}
+                    value={`${m.displaySymbol} ${m.baseToken}`} // search by ticker or raw name
+                    onSelect={() => {
+                      onSelect(m);
+                      setOpen(false);
+                    }}
+                    className="flex items-center gap-2 py-2"
+                  >
+                    <span className="flex flex-1 items-baseline gap-0.5">
+                      <span className="font-medium text-foreground">{m.displayBase}</span>
+                      <span className="text-muted-foreground">/{m.displayQuote}</span>
                     </span>
-                  )}
-                </CommandItem>
-              ))}
+                    <Check
+                      className={cn(
+                        "h-4 w-4 text-foreground transition-opacity",
+                        active ? "opacity-100" : "opacity-0",
+                      )}
+                    />
+                  </CommandItem>
+                );
+              })}
             </CommandGroup>
           </CommandList>
         </Command>

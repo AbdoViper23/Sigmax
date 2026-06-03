@@ -74,8 +74,12 @@ function StrategyDetail({ leader, id }: { leader: Leader; id: string }) {
   );
 
   // Track record of recent trades. Real per-leader trade history is computed for the aggregate stats
-  // above; the example trade rows render only in the mock fallback (no contracts configured).
-  const trades = chainConfigReady ? undefined : mockLeaderPositions[leader.id.toLowerCase()];
+  // above; the example trade rows render in the mock fallback (no contracts configured) — and always
+  // for seeded test leaders, whose whole point is to demo a populated track record even when live.
+  const trades =
+    leader.flaggedForTesting || !chainConfigReady
+      ? mockLeaderPositions[leader.id.toLowerCase()]
+      : undefined;
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-10">
@@ -88,6 +92,7 @@ function StrategyDetail({ leader, id }: { leader: Leader; id: string }) {
         maxDrawdownPct={leader.performance.maxDrawdownPct}
         subscribers={leader.subscribers}
         publishedSignals={publishedSignals}
+        flaggedForTesting={leader.flaggedForTesting}
       />
       {/* Subscribe sits up top at a constrained width; the trades table gets the full row below. */}
       <div className="mt-10 lg:max-w-xl">{subscribeArea}</div>

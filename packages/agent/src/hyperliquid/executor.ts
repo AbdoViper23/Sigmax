@@ -9,6 +9,7 @@ import {
   planSpotOrder,
   resolvePair,
   unitsToNumber,
+  type ResolvedPair,
   type SpotMeta,
 } from "./meta.js";
 
@@ -71,8 +72,25 @@ export class HyperliquidExecutor implements Executor {
   }
 
   /**
+   * Best ask (buy) / best bid (sell) from the L2 book — the price a market order must reach to fill.
+   * Used instead of mid for marketable IOC pricing so it crosses even on wide books. Degrades to `mid`
+   * if the book can't be read or the relevant side is empty, so a transient hiccup falls back to the
+   * old behaviour rather than throwing.
+   */
+  private async touchPrice(pair: ResolvedPair, isBuy: boolean, mid: number): Promise<number> {
+    try {
+      const book = await this.info.l2Book({ coin: pair.pairName });
+      const [bids, asks] = book?.levels ?? [[], []];
+      const px = Number(isBuy ? asks?.[0]?.px : bids?.[0]?.px);
+      return px > 0 ? px : mid;
+    } catch {
+      return mid;
+    }
+  }
+
+  /**
    * Place an IOC spot order for `tokenIn -> tokenOut`. Two modes:
-   *  - MARKET (`maxEntryPrice` 0/undefined): marketable IOC at `mid ± slippage`.
+   *  - MARKET (`maxEntryPrice` 0/undefined): marketable IOC priced off the book touch ± slippage.
    *  - LIMIT (`maxEntryPrice > 0` on a BUY): IOC capped at that price — fills now if the book is
    *    marketable at/under it, otherwise nothing fills and we throw "limit price not reached" (the
    *    pipeline logs that as a per-follower skip). This matches "execute as soon as posted".
@@ -99,8 +117,16 @@ export class HyperliquidExecutor implements Executor {
     if (!midStr) throw new Error(`hyperliquid: no mid price for ${pair.pairName}`);
     const mid = Number(midStr);
 
+    // A MARKET order must cross the OPPOSITE side of the book, not the mid. On a wide/dislocated book
+    // (common on testnet — e.g. a HYPE/USDC spread of 62.88/88.0 around a 75.44 mid) `mid ± slippage`
+    // may never reach the touch, so the IOC cancels with "could not immediately match". Price off the
+    // best ask (buy) / best bid (sell); `marketableIocPrice` then adds the slippage buffer on top so it
+    // still crosses. LIMIT orders keep `mid` — their execution price is the explicit cap, not mid-derived.
+    const isLimit = pair.isBuy && (args.maxEntryPrice ?? 0n) > 0n;
+    const refPx = isLimit ? mid : await this.touchPrice(pair, pair.isBuy, mid);
+
     // Decide MARKET vs LIMIT and compute the rounded price/size (pure, unit-tested in meta.ts).
-    const plan = planSpotOrder(pair, mid, args.slippageBps, args.amountIn, args.maxEntryPrice ?? 0n);
+    const plan = planSpotOrder(pair, refPx, args.slippageBps, args.amountIn, args.maxEntryPrice ?? 0n);
 
     const res = await this.exchange.order({
       orders: [{ a: pair.assetId, b: pair.isBuy, p: plan.price, s: plan.size, r: false, t: { limit: { tif: "Ioc" } } }],
