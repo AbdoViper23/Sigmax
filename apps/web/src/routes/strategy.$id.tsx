@@ -8,9 +8,9 @@ import { PositionsTable } from "@/components/sigmax/PositionsTable";
 import { NetworkSwitchPrompt } from "@/components/sigmax/NetworkSwitchPrompt";
 import { chainConfigReady, env } from "@/lib/env";
 import { useNetwork } from "@/hooks/useNetwork";
-import { useSubscription } from "@/hooks/follower";
+import { useCopyTrade } from "@/hooks/follower";
 import { useLeader } from "@/hooks/leaders";
-import { getPublishedSignals } from "@/lib/publishedSignals";
+import { getPublishedSignals, signalProofs } from "@/lib/publishedSignals";
 import { mockLeaderPositions } from "@/lib/mock";
 import type { Leader } from "@/lib/leaders";
 
@@ -41,17 +41,17 @@ function StrategyPage() {
 
 function StrategyDetail({ leader, id }: { leader: Leader; id: string }) {
   const net = useNetwork();
-  const sub = useSubscription(id as Hex);
+  const copy = useCopyTrade(id as Hex);
 
   // Real publish history recorded by this browser (non-secret metadata only — no TP/SL).
   const publishedSignals = getPublishedSignals(id).map((s) => ({
     signalId: s.uuid !== undefined ? `CDR vault #${s.uuid}` : s.signalId,
     at: s.at,
-    txUrl: env.explorers.story,
+    proofs: signalProofs(s, env.explorers.story),
   }));
 
   // Plan price comes from the registry read; fall back to the leader's PlanCreated price.
-  const priceWip = Number(sub.monthlyPriceWip) > 0 ? sub.monthlyPriceWip : leader.monthlyPriceWip;
+  const priceWip = Number(copy.monthlyPriceWip) > 0 ? copy.monthlyPriceWip : leader.monthlyPriceWip;
 
   const subscribeArea = (
     <NetworkSwitchPrompt
@@ -62,19 +62,24 @@ function StrategyDetail({ leader, id }: { leader: Leader; id: string }) {
       <SubscribeCard
         strategyName={leader.displayName}
         monthlyPriceWip={priceWip}
-        status={sub.status}
-        activeUntil={sub.activeUntil}
+        status={copy.active ? "active" : "idle"}
+        activeUntil={copy.activeUntil}
+        pendingLabel={copy.phase === "authorizing" ? "Authorizing…" : "Subscribing…"}
         onSubscribe={async () => {
-          await sub.subscribe();
-          toast.success(`Subscribed to ${leader.displayName}`);
+          await copy.start();
+          toast.success(`You're now copying ${leader.displayName}`);
         }}
       />
     </NetworkSwitchPrompt>
   );
 
   // Track record of recent trades. Real per-leader trade history is computed for the aggregate stats
-  // above; the example trade rows render only in the mock fallback (no contracts configured).
-  const trades = chainConfigReady ? undefined : mockLeaderPositions[leader.id.toLowerCase()];
+  // above; the example trade rows render in the mock fallback (no contracts configured) — and always
+  // for seeded test leaders, whose whole point is to demo a populated track record even when live.
+  const trades =
+    leader.flaggedForTesting || !chainConfigReady
+      ? mockLeaderPositions[leader.id.toLowerCase()]
+      : undefined;
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-10">
@@ -87,6 +92,7 @@ function StrategyDetail({ leader, id }: { leader: Leader; id: string }) {
         maxDrawdownPct={leader.performance.maxDrawdownPct}
         subscribers={leader.subscribers}
         publishedSignals={publishedSignals}
+        flaggedForTesting={leader.flaggedForTesting}
       />
       {/* Subscribe sits up top at a constrained width; the trades table gets the full row below. */}
       <div className="mt-10 lg:max-w-xl">{subscribeArea}</div>

@@ -1,6 +1,7 @@
 import type { Hex } from "viem";
-import { SignalSchema, ARBITRUM_ADDRESSES, type Signal } from "@sigmax/shared";
+import { SignalSchema, ARBITRUM_ADDRESSES, encodeSignal, decodeSignal, type Signal } from "@sigmax/shared";
 import type { Executor, PriceSource, SubscriberSource } from "../src/ports.js";
+import { type CdrPort, ReadConditionDenied } from "@sigmax/cdr";
 
 export const STRATEGY = "0x77319B4031e6eF1250907aa00018B8B1c67a244b" as Hex;
 export const USDC = ARBITRUM_ADDRESSES.usdc as Hex;
@@ -15,10 +16,11 @@ export function makeSignal(overrides: Partial<Signal> = {}): Signal {
     signalId: "11111111-2222-3333-4444-555555555555",
     strategyId: STRATEGY,
     chainId: 42161,
+    venue: "arbitrum", // these fixtures use EVM addresses; HL-specific tests override venue + token
     action: "ENTRY",
     token: WETH,
     quoteToken: USDC,
-    sizeBps: 5000,
+    sizeBps: 500,
     takeProfitPrice: TP,
     stopLossPrice: SL,
     issuedAt: 1_900_000_000,
@@ -29,8 +31,8 @@ export function makeSignal(overrides: Partial<Signal> = {}): Signal {
 
 export interface SwapCall {
   vault: Hex;
-  tokenIn: Hex;
-  tokenOut: Hex;
+  tokenIn: string;
+  tokenOut: string;
   amountIn: bigint;
 }
 
@@ -55,7 +57,7 @@ export class FakeExecutor implements Executor {
   async perTradeCap(): Promise<bigint> {
     return this.opts.cap ?? 1_000_000_000n;
   }
-  async quoteAndSwap(a: { vault: Hex; tokenIn: Hex; tokenOut: Hex; amountIn: bigint }): Promise<{ txHash: Hex; received: bigint }> {
+  async quoteAndSwap(a: { vault: Hex; tokenIn: string; tokenOut: string; amountIn: bigint }): Promise<{ txHash: Hex; received: bigint }> {
     if (this.opts.throwForVault?.(a.vault)) throw new Error("swap reverted");
     this.swaps.push({ vault: a.vault, tokenIn: a.tokenIn, tokenOut: a.tokenOut, amountIn: a.amountIn });
     return { txHash: ("0x" + "cd".repeat(32)) as Hex, received: this.opts.received ? this.opts.received(a.amountIn) : a.amountIn / 2n };
@@ -89,4 +91,26 @@ export class FakeSubscribers implements SubscriberSource {
 export function recordingSink(): { lines: string[]; sink: (l: string) => void } {
   const lines: string[] = [];
   return { lines, sink: (l: string) => lines.push(l) };
+}
+
+/**
+ * In-memory CDR double for tests — stores the ABI-encoded signal and gates reads on a flag, mirroring
+ * the on-chain LicenseReadCondition (revert when the caller lacks a valid license). Test-only and NOT
+ * confidential; the product path is always RealCdr (live threshold encryption on Story Aeneid).
+ */
+export class FakeCdr implements CdrPort {
+  private vaults = new Map<number, Hex>();
+  private nextUuid = 1;
+  constructor(private readonly opts: { hasLicense: boolean } = { hasLicense: true }) {}
+  async publishSignal(signal: Signal): Promise<{ uuid: number }> {
+    const uuid = this.nextUuid++;
+    this.vaults.set(uuid, encodeSignal(signal)); // validates on encode
+    return { uuid };
+  }
+  async accessSignal(uuid: number): Promise<Signal> {
+    if (!this.opts.hasLicense) throw new ReadConditionDenied();
+    const data = this.vaults.get(uuid);
+    if (!data) throw new Error(`vault ${uuid} not found`);
+    return decodeSignal(data); // re-validates on decode
+  }
 }

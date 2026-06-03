@@ -17,7 +17,7 @@ import {
   STORY_AENEID_ADDRESSES,
   type Signal,
 } from "@sigmax/shared";
-import { type CdrPort, ReadConditionDenied } from "./port.js";
+import { type CdrPort, type CdrPublishTxHashes, ReadConditionDenied } from "./port.js";
 
 export interface RealCdrConfig {
   privateKey: Hex; // CDR access key — funded Aeneid wallet; writes vaults + holds the operator licenses
@@ -63,7 +63,7 @@ export class RealCdr implements CdrPort {
     });
   }
 
-  async publishSignal(signal: Signal): Promise<{ uuid: number }> {
+  async publishSignal(signal: Signal): Promise<{ uuid: number; txHashes: CdrPublishTxHashes }> {
     await initWasm();
     // Read-gate this vault to the signal's own leader IP, so only an agent holding a license for THAT
     // IP can decrypt it (per-leader confidentiality). The agent's wallet is the writer (owner).
@@ -72,7 +72,7 @@ export class RealCdr implements CdrPort {
       [STORY_AENEID_ADDRESSES.licenseToken as Hex, signal.strategyId as Hex],
     );
     const writeConditionData = encodeAbiParameters([{ type: "address" }], [this.ownerAddress]);
-    const { uuid } = await this.client.uploader.uploadCDR({
+    const { uuid, txHashes } = await this.client.uploader.uploadCDR({
       dataKey: hexToBytes(encodeSignal(signal)),
       updatable: false, // fresh vault per signal → independently auditable (doc 20 §4)
       writeConditionAddr: STORY_AENEID_ADDRESSES.ownerWriteCondition as Hex,
@@ -81,7 +81,9 @@ export class RealCdr implements CdrPort {
       readConditionData,
       accessAuxData: "0x",
     });
-    return { uuid };
+    // Both are public on-chain ids (the encrypted signal body stays unlogged): `write` commits the
+    // ciphertext (the commit-before-outcome proof), `allocate` creates the vault.
+    return { uuid, txHashes: { allocate: txHashes.allocate, write: txHashes.write } };
   }
 
   async accessSignal(uuid: number): Promise<Signal> {

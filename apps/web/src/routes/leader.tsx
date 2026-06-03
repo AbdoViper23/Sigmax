@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useAccount } from "wagmi";
 import type { Hex } from "viem";
@@ -14,7 +15,7 @@ import { useNetwork } from "@/hooks/useNetwork";
 import { usePublishSignal, useStrategyStats } from "@/hooks/leader";
 import { useLeaders } from "@/hooks/leaders";
 import { useRegisterLeader, type RegisterStep } from "@/hooks/useStoryIp";
-import { addPublishedSignal, getPublishedSignals } from "@/lib/publishedSignals";
+import { addPublishedSignal, getPublishedSignals, signalProofs } from "@/lib/publishedSignals";
 import { mockTx } from "@/lib/mock";
 
 export const Route = createFileRoute("/leader")({
@@ -87,6 +88,7 @@ function LockedPublish() {
 function LeaderLive() {
   const net = useNetwork();
   const { address } = useAccount();
+  const qc = useQueryClient();
   const { leaders } = useLeaders();
 
   // A leader's own strategy is the plan whose on-chain leader == the connected wallet.
@@ -104,7 +106,7 @@ function LeaderLive() {
     ? {
         signalId:
           signals[0].uuid !== undefined ? `CDR vault #${signals[0].uuid}` : signals[0].signalId,
-        txUrl: env.explorers.story,
+        proofs: signalProofs(signals[0], env.explorers.story),
         at: signals[0].at,
       }
     : undefined;
@@ -123,6 +125,9 @@ function LeaderLive() {
             statusNote={STEP_TEXT[step]}
             onRegister={async (v) => {
               await register(v);
+              // Refresh the on-chain leader list so this page flips to "registered" immediately
+              // (otherwise the UI stays stale until a re-render).
+              await qc.invalidateQueries({ queryKey: ["leaders-onchain"] });
               toast.success(`Registered as "${v.displayName}"`);
             }}
           />
@@ -157,6 +162,7 @@ function LeaderLive() {
                     uuid: r.uuid,
                     action: v.action,
                     at: r.at,
+                    txHashes: r.txHashes,
                   }),
                 );
                 toast.success(`${v.action} signal published`);

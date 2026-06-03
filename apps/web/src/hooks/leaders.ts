@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { formatUnits, type Address } from "viem";
 import { chainConfigReady, env } from "@/lib/env";
 import { COPY_VAULT_ABI, COPY_VAULT_FACTORY_ABI, SUBSCRIPTION_REGISTRY_ABI } from "@/lib/abis";
-import { mockLeaders } from "@/lib/mock";
+import { mockLeaders, testLeaders } from "@/lib/mock";
 import type { Leader, LeaderPerformance } from "@/lib/leaders";
 
 const STORY = env.storyChainId;
@@ -99,18 +99,24 @@ export function useLeaders(): { leaders: Leader[]; loading: boolean } {
         subsByStrategy.set(key, set);
       }
 
-      // 3. owner → vault from VaultCreated (Arbitrum).
-      const vaultLogs = await arb.getContractEvents({
-        address: env.factoryAddress,
-        abi: COPY_VAULT_FACTORY_ABI,
-        eventName: "VaultCreated",
-        fromBlock: "earliest",
-        toBlock: "latest",
-      });
+      // 3. owner → vault from VaultCreated (Arbitrum). Best-effort: the execution chain (or a local
+      // fork) may be unreachable — if so, degrade gracefully and list leaders from Story without
+      // trade metrics, instead of failing the whole leaderboard.
       const vaultByOwner = new Map<string, Address>();
-      for (const l of vaultLogs) {
-        const { owner, vault } = l.args as { owner?: Address; vault?: Address };
-        if (owner && vault) vaultByOwner.set(owner.toLowerCase(), vault);
+      try {
+        const vaultLogs = await arb.getContractEvents({
+          address: env.factoryAddress,
+          abi: COPY_VAULT_FACTORY_ABI,
+          eventName: "VaultCreated",
+          fromBlock: "earliest",
+          toBlock: "latest",
+        });
+        for (const l of vaultLogs) {
+          const { owner, vault } = l.args as { owner?: Address; vault?: Address };
+          if (owner && vault) vaultByOwner.set(owner.toLowerCase(), vault);
+        }
+      } catch {
+        // execution chain unreachable — leaders still render from Story data below.
       }
 
       // Cache per-vault Swapped scans (a vault is shared if a follower copies several leaders).
@@ -119,14 +125,19 @@ export function useLeaders(): { leaders: Leader[]; loading: boolean } {
         const key = vault.toLowerCase();
         const cached = swapsCache.get(key);
         if (cached) return cached;
-        const logs = await arb.getContractEvents({
-          address: vault,
-          abi: COPY_VAULT_ABI,
-          eventName: "Swapped",
-          fromBlock: "earliest",
-          toBlock: "latest",
-        });
-        const swaps = logs.map((l) => l.args as Swap);
+        let swaps: Swap[] = [];
+        try {
+          const logs = await arb.getContractEvents({
+            address: vault,
+            abi: COPY_VAULT_ABI,
+            eventName: "Swapped",
+            fromBlock: "earliest",
+            toBlock: "latest",
+          });
+          swaps = logs.map((l) => l.args as Swap);
+        } catch {
+          // execution chain unreachable — no trade metrics for this vault.
+        }
         swapsCache.set(key, swaps);
         return swaps;
       };
@@ -161,10 +172,12 @@ export function useLeaders(): { leaders: Leader[]; loading: boolean } {
     },
   });
 
+  // Seeded test leaders are always appended (flagged in the UI) so the marketplace + track-record
+  // views can be demoed even against a live deployment with no real leaders yet. See lib/mock.ts.
   // Mock fallback only when contracts aren't configured (keeps dev/SSR rendering).
-  if (!chainConfigReady) return { leaders: mockLeaders, loading: false };
+  if (!chainConfigReady) return { leaders: [...mockLeaders, ...testLeaders], loading: false };
 
-  return { leaders: q.data ?? [], loading: q.isLoading };
+  return { leaders: [...(q.data ?? []), ...testLeaders], loading: q.isLoading };
 }
 
 /** Resolve a single leader by strategy id (route param). Undefined when no such leader exists. */

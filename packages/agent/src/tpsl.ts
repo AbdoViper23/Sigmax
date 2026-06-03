@@ -1,10 +1,11 @@
+import type { SignalVenueT } from "@sigmax/shared";
 import type { Executor, PriceSource, OpenPosition } from "./ports.js";
 import type { PositionStore } from "./state.js";
 import type { AgentLogger } from "./logger.js";
 
 export interface TpSlDeps {
-  executor: Executor;
-  price: PriceSource;
+  executorFor: (venue: SignalVenueT) => Executor;
+  priceFor: (venue: SignalVenueT) => PriceSource;
   store: PositionStore;
   logger: AgentLogger;
   pollMs: number;
@@ -44,15 +45,16 @@ export class TpSlMonitor {
 
   /** One monitoring pass. Safe to call directly (tests drive it without a timer). */
   async tick(): Promise<void> {
-    for (const [token, positions] of this.d.store.byToken()) {
+    for (const group of this.d.store.positionGroups()) {
       let price: bigint;
       try {
-        price = await this.d.price.getPrice(token);
+        // Price + executor are resolved per venue, priced in the position's own quote token.
+        price = await this.d.priceFor(group.venue).getPrice(group.token, group.quoteToken);
       } catch (err) {
         this.d.logger.error({ event: "price_failed", message: errMsg(err) });
-        continue; // a price failure for one token doesn't block others
+        continue; // a price failure for one market doesn't block others
       }
-      for (const p of positions) {
+      for (const p of group.positions) {
         const reason = crossReason(p, price);
         if (reason) await this.exit(p, reason);
       }
@@ -61,7 +63,7 @@ export class TpSlMonitor {
 
   private async exit(p: OpenPosition, reason: "TP" | "SL"): Promise<void> {
     try {
-      const { txHash, received } = await this.d.executor.quoteAndSwap({
+      const { txHash, received } = await this.d.executorFor(p.venue).quoteAndSwap({
         vault: p.vault,
         tokenIn: p.token,
         tokenOut: p.quoteToken,

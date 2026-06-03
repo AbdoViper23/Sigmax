@@ -40,7 +40,8 @@ export class ChainlinkPriceSource implements PriceSource {
     this.publicClient = createPublicClient({ chain, transport: http(cfg.rpcUrl) });
   }
 
-  async getPrice(token: Hex): Promise<bigint> {
+  async getPrice(token: string, _quoteToken?: string): Promise<bigint> {
+    // Arbitrum uses USD-denominated Chainlink feeds, so the quote token isn't needed here.
     const feed = this.feeds[token.toLowerCase()];
     if (!feed) throw new Error(`no price feed configured for token ${token}`);
 

@@ -8,6 +8,7 @@ export interface RegistrySubscriberSourceConfig {
   registryAddress: Hex;
   followers: Hex[]; // demo follower set
   chainId?: number; // default Story Aeneid
+  trustConfiguredFollowers?: boolean; // DEMO-ONLY: treat `followers` as active without the on-chain check
 }
 
 /**
@@ -18,9 +19,11 @@ export interface RegistrySubscriberSourceConfig {
 export class RegistrySubscriberSource implements SubscriberSource {
   private readonly publicClient: PublicClient;
   private readonly cfg: RegistrySubscriberSourceConfig;
+  private readonly trusted: Set<string>; // lowercased configured followers, for the demo bypass
 
   constructor(cfg: RegistrySubscriberSourceConfig) {
     this.cfg = cfg;
+    this.trusted = new Set(cfg.followers.map((f) => f.toLowerCase()));
     const chain = defineChain({
       id: cfg.chainId ?? STORY_AENEID.id,
       name: STORY_AENEID.name,
@@ -31,6 +34,9 @@ export class RegistrySubscriberSource implements SubscriberSource {
   }
 
   async isActive(follower: Hex, strategyId: Hex): Promise<boolean> {
+    // DEMO-ONLY bypass: a configured follower counts as active without an on-chain subscription. The
+    // loop is still gated by *a* subscribe step (the env list); production keeps this off (real check).
+    if (this.cfg.trustConfiguredFollowers && this.trusted.has(follower.toLowerCase())) return true;
     return this.publicClient.readContract({
       address: this.cfg.registryAddress,
       abi: SUBSCRIPTION_REGISTRY_ABI,

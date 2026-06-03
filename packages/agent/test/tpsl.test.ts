@@ -13,6 +13,7 @@ function position(over: Partial<OpenPosition> = {}): OpenPosition {
   return {
     signalId: "s1",
     uuid: 1,
+    venue: "arbitrum",
     follower: FOLLOWER,
     vault: VAULT,
     token: WETH,
@@ -48,8 +49,8 @@ describe("TpSlMonitor.tick", () => {
     const executor = new FakeExecutor();
     const store = new PositionStore();
     const monitor = new TpSlMonitor({
-      executor,
-      price: new FakePrice(price),
+      executorFor: () => executor,
+      priceFor: () => new FakePrice(price),
       store,
       logger: new AgentLogger(() => {}),
       pollMs: 1000,

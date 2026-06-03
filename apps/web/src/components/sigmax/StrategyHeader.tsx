@@ -1,5 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { ExternalLink, ShieldCheck } from "lucide-react";
+import { TestBadge } from "./TestBadge";
 import { cn } from "@/lib/utils";
 
 export interface StrategyHeaderProps {
@@ -10,7 +11,12 @@ export interface StrategyHeaderProps {
   winRatePct: number | null;
   maxDrawdownPct: number | null;
   subscribers: number;
-  publishedSignals: { signalId: string; at: string; txUrl: string }[];
+  publishedSignals: {
+    signalId: string;
+    at: string;
+    proofs: { label: string; url: string }[];
+  }[];
+  flaggedForTesting?: boolean;
 }
 
 function Stat({
@@ -48,6 +54,7 @@ export function StrategyHeader({
   maxDrawdownPct,
   subscribers,
   publishedSignals,
+  flaggedForTesting,
 }: StrategyHeaderProps) {
   return (
     <div className="space-y-6">
@@ -56,15 +63,22 @@ export function StrategyHeader({
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-3xl font-semibold tracking-tight">{name}</h1>
             {username && <span className="text-sm text-muted-foreground">@{username}</span>}
+            {flaggedForTesting && <TestBadge />}
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
             {bio ??
               "Verifiable track record. Every signal is committed on-chain before its outcome is known."}
           </p>
         </div>
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-success/30 bg-success/10 px-2.5 py-1 text-xs font-medium text-success">
-          <ShieldCheck className="h-3.5 w-3.5" /> Commit-before-outcome
-        </span>
+        {flaggedForTesting ? (
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-warning/40 bg-warning/10 px-2.5 py-1 text-xs font-medium text-warning">
+            Seeded demo data
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-success/30 bg-success/10 px-2.5 py-1 text-xs font-medium text-success">
+            <ShieldCheck className="h-3.5 w-3.5" /> Commit-before-outcome
+          </span>
+        )}
       </div>
 
       <Card>
@@ -104,14 +118,17 @@ export function StrategyHeader({
                   <span className="text-xs text-muted-foreground">
                     {new Date(s.at).toLocaleString()}
                   </span>
-                  <a
-                    href={s.txUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 text-xs hover:text-foreground"
-                  >
-                    proof <ExternalLink className="h-3 w-3" />
-                  </a>
+                  {s.proofs.map((p) => (
+                    <a
+                      key={p.url}
+                      href={p.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-xs hover:text-foreground"
+                    >
+                      {p.label} <ExternalLink className="h-3 w-3" />
+                    </a>
+                  ))}
                 </div>
               </li>
             ))}

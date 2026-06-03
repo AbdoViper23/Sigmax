@@ -40,15 +40,30 @@ export class PositionStore {
   all(): OpenPosition[] {
     return [...this.positions.values()];
   }
-  /** Open positions grouped by token, so one price read serves every follower holding that token. */
-  byToken(): Map<Hex, OpenPosition[]> {
-    const m = new Map<Hex, OpenPosition[]>();
+  /**
+   * Open positions grouped by (venue, token, quoteToken), so one price read serves every follower
+   * holding that exact market — and the same base on a different venue/quote never shares a price.
+   */
+  positionGroups(): {
+    venue: OpenPosition["venue"];
+    token: string;
+    quoteToken: string;
+    positions: OpenPosition[];
+  }[] {
+    const m = new Map<
+      string,
+      { venue: OpenPosition["venue"]; token: string; quoteToken: string; positions: OpenPosition[] }
+    >();
     for (const p of this.positions.values()) {
-      const list = m.get(p.token) ?? [];
-      list.push(p);
-      m.set(p.token, list);
+      const k = `${p.venue}:${p.token.toLowerCase()}:${p.quoteToken.toLowerCase()}`;
+      let g = m.get(k);
+      if (!g) {
+        g = { venue: p.venue, token: p.token, quoteToken: p.quoteToken, positions: [] };
+        m.set(k, g);
+      }
+      g.positions.push(p);
     }
-    return m;
+    return [...m.values()];
   }
 
   // ----- persistence (non-secret only) -----
@@ -96,10 +111,11 @@ export class PositionStore {
         this.open({
           signalId: sp.signalId,
           uuid: sp.uuid,
+          venue: sp.venue,
           follower: sp.follower as Hex,
           vault: sp.vault as Hex,
-          token: sp.token as Hex,
-          quoteToken: sp.quoteToken as Hex,
+          token: sp.token,
+          quoteToken: sp.quoteToken,
           amountIn: BigInt(sp.amountIn),
           received: BigInt(sp.received),
           entryTxHash: sp.entryTxHash as Hex,

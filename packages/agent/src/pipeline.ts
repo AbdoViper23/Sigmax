@@ -1,6 +1,6 @@
 import type { Hex } from "viem";
 import type { CdrPort } from "@sigmax/cdr";
-import { SignalSchema, type Signal } from "@sigmax/shared";
+import { SignalSchema, type Signal, type SignalVenueT } from "@sigmax/shared";
 import type { Executor, SubscriberSource } from "./ports.js";
 import { entryAmount } from "./executor.js";
 import { PositionStore } from "./state.js";
@@ -8,7 +8,8 @@ import { AgentLogger } from "./logger.js";
 
 export interface PipelineDeps {
   cdr: CdrPort;
-  executor: Executor;
+  /** Resolve the executor for a signal's/position's venue. Throws `venue_not_configured` if unbuilt. */
+  executorFor: (venue: SignalVenueT) => Executor;
   subscribers: SubscriberSource;
   store: PositionStore;
   logger: AgentLogger;
@@ -84,8 +85,17 @@ export class SignalPipeline {
       return;
     }
 
-    const token = signal.token as Hex;
-    const quoteToken = signal.quoteToken as Hex;
+    const token = signal.token;
+    const quoteToken = signal.quoteToken;
+    // Route to the venue the leader chose for this signal. If this agent isn't configured for that
+    // venue, skip the whole signal cleanly (never crash the loop) instead of failing every follower.
+    let executor: Executor;
+    try {
+      executor = this.d.executorFor(signal.venue);
+    } catch {
+      this.d.logger.skipped({ signalId: signal.signalId, follower: "*", reason: "venue_not_configured" });
+      return;
+    }
 
     // 5+6. per-follower, isolated: eligibility → size → quote+swap → record position.
     for (const follower of followers) {
@@ -101,24 +111,28 @@ export class SignalPipeline {
           this.d.logger.skipped({ signalId: signal.signalId, follower, reason: "inactive" });
           continue;
         }
-        const vault = await this.d.executor.vaultOf(follower);
-        const balance = await this.d.executor.balanceOf(vault, quoteToken);
-        const cap = await this.d.executor.perTradeCap(vault);
+        const vault = await executor.vaultOf(follower);
+        const balance = await executor.balanceOf(vault, quoteToken);
+        const cap = await executor.perTradeCap(vault);
         const amountIn = entryAmount(balance, signal.sizeBps, cap);
         if (amountIn === 0n) {
           this.d.logger.skipped({ signalId: signal.signalId, follower, reason: "zero_size" });
           continue;
         }
-        const { txHash, received } = await this.d.executor.quoteAndSwap({
+        const { txHash, received } = await executor.quoteAndSwap({
           vault,
           tokenIn: quoteToken,
           tokenOut: token,
           amountIn,
           slippageBps: this.d.defaultSlippageBps,
+          // LIMIT vs MARKET: a non-zero maxEntryPrice caps the entry fill price (venue places a limit
+          // order at it); "0" = market. EXIT/TP-SL below never pass it (exits are always market).
+          maxEntryPrice: BigInt(signal.maxEntryPrice),
         });
         this.d.store.open({
           signalId: signal.signalId,
           uuid,
+          venue: signal.venue,
           follower,
           vault,
           token,
@@ -152,13 +166,14 @@ export class SignalPipeline {
     // A manual EXIT carries its own signalId (won't match the entry's), so positions are resolved by
     // follower + token. Closes every matching open position — even for followers whose subscription
     // expired (never strand someone mid-trade, doc 31).
-    const token = signal.token as Hex;
+    const token = signal.token;
     const followerSet = new Set(followers.map((f) => f.toLowerCase()));
     for (const p of this.d.store.all()) {
       if (p.token.toLowerCase() !== token.toLowerCase()) continue;
       if (!followerSet.has(p.follower.toLowerCase())) continue;
       try {
-        const { txHash, received } = await this.d.executor.quoteAndSwap({
+        // Close on the same venue the position was opened on (recorded at entry).
+        const { txHash, received } = await this.d.executorFor(p.venue).quoteAndSwap({
           vault: p.vault,
           tokenIn: p.token,
           tokenOut: p.quoteToken,

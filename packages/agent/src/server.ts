@@ -30,8 +30,19 @@ export function createSignalServer(
   return server;
 }
 
-function setCors(res: ServerResponse, origin: string): void {
+/**
+ * `allowOrigin` is a comma-separated allowlist. Browsers require the `access-control-allow-origin`
+ * header to exactly match the request's Origin, so we echo the incoming Origin when it's allowed
+ * (and fall back to the first configured origin otherwise). `Vary: Origin` keeps caches correct.
+ */
+function setCors(res: ServerResponse, allowOrigin: string, reqOrigin?: string): void {
+  const allowed = allowOrigin
+    .split(",")
+    .map((o) => o.trim())
+    .filter(Boolean);
+  const origin = reqOrigin && allowed.includes(reqOrigin) ? reqOrigin : (allowed[0] ?? "");
   res.setHeader("access-control-allow-origin", origin);
+  res.setHeader("vary", "Origin");
   res.setHeader("access-control-allow-methods", "POST, OPTIONS");
   res.setHeader("access-control-allow-headers", "content-type, x-leader-address");
 }
@@ -60,7 +71,7 @@ async function handle(
   opts: SignalServerOptions,
   logger: AgentLogger,
 ): Promise<void> {
-  setCors(res, opts.allowOrigin);
+  setCors(res, opts.allowOrigin, req.headers.origin);
 
   if (req.method === "OPTIONS") {
     res.statusCode = 204;
@@ -88,14 +99,15 @@ async function handle(
     }
 
     try {
-      const { uuid } = await agent.publishSignal(signal);
+      const { uuid, txHashes } = await agent.publishSignal(signal);
       logger.signalReceived({
         uuid,
         strategyId: signal.strategyId,
         signalId: signal.signalId,
         action: signal.action,
       });
-      json(res, 200, { uuid });
+      // txHashes are public on-chain ids — safe to return so the leader UI can link to the proof.
+      json(res, 200, { uuid, txHashes });
       // Demo convenience: process immediately so the swap fans out. Fire-and-forget.
       void agent.processSignal(uuid).catch((err) =>
         logger.error({

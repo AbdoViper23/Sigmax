@@ -166,4 +166,46 @@ contract SubscriptionRegistryTest is Test {
         vm.expectRevert(SubscriptionRegistry.ZeroAddress.selector);
         new SubscriptionRegistry(address(0));
     }
+
+    function test_cancel_deactivatesImmediately_andEmits() public {
+        vm.prank(follower);
+        registry.subscribe(strategyId);
+        assertTrue(registry.isActive(follower, strategyId), "active after subscribe");
+
+        vm.expectEmit(true, true, false, false, address(registry));
+        emit SubscriptionRegistry.SubscriptionCancelled(strategyId, follower);
+        vm.prank(follower);
+        registry.cancel(strategyId);
+
+        assertFalse(registry.isActive(follower, strategyId), "inactive immediately after cancel");
+        assertEq(registry.expiryOf(follower, strategyId), 0, "expiry reset to 0");
+    }
+
+    function test_cancel_revertsWhenNeverSubscribed() public {
+        vm.prank(stranger);
+        vm.expectRevert(SubscriptionRegistry.NotSubscribed.selector);
+        registry.cancel(strategyId);
+    }
+
+    function test_resubscribe_afterCancel_startsFreshPeriod() public {
+        uint256 tStart = block.timestamp;
+        vm.prank(follower);
+        registry.subscribe(strategyId);
+
+        vm.warp(tStart + 5 days);
+        vm.prank(follower);
+        registry.cancel(strategyId);
+        assertFalse(registry.isActive(follower, strategyId), "inactive after cancel");
+
+        // Re-subscribe a few days later: base is `now` (expiry was 0), so a full fresh PERIOD.
+        vm.warp(tStart + 8 days);
+        vm.prank(follower);
+        registry.subscribe(strategyId);
+        assertEq(
+            registry.expiryOf(follower, strategyId),
+            uint64(tStart + 8 days + 30 days),
+            "re-subscribe starts a fresh 30d period from now"
+        );
+        assertTrue(registry.isActive(follower, strategyId), "active again after re-subscribe");
+    }
 }

@@ -1,4 +1,5 @@
-import { Check } from "lucide-react";
+import { Check, ArrowRight } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { TxButton } from "./TxButton";
 import { SubscriptionStatusBadge } from "./SubscriptionStatusBadge";
@@ -9,6 +10,10 @@ export interface SubscribeCardProps {
   status: "idle" | "subscribing" | "active";
   activeUntil?: string;
   onSubscribe: () => Promise<void>;
+  /** Primary button label. Defaults to the one-click chained copy-trade action. */
+  buttonLabel?: string;
+  /** Pending label shown while the chained subscribe + authorize runs. */
+  pendingLabel?: string;
 }
 
 export function SubscribeCard({
@@ -17,6 +22,8 @@ export function SubscribeCard({
   status,
   activeUntil,
   onSubscribe,
+  buttonLabel = "Subscribe & start copying",
+  pendingLabel = "Starting…",
 }: SubscribeCardProps) {
   return (
     <Card>
@@ -56,11 +63,22 @@ export function SubscribeCard({
           </li>
         </ul>
         {status !== "active" ? (
-          <TxButton label="Subscribe" pendingLabel="Subscribing…" onClick={onSubscribe} />
+          <>
+            <TxButton label={buttonLabel} pendingLabel={pendingLabel} onClick={onSubscribe} />
+            <p className="text-center text-xs text-muted-foreground">
+              One click subscribes and authorizes copy-trading — funds never leave your account.
+            </p>
+          </>
         ) : (
-          <div className="rounded-md border border-success/30 bg-success/5 px-3 py-2 text-sm text-success">
-            Subscription active. Continue to step 2.
-          </div>
+          <Link
+            to="/follower"
+            className="flex items-center justify-between rounded-md border border-success/30 bg-success/5 px-3 py-2 text-sm text-success transition-colors hover:bg-success/10"
+          >
+            <span>You're copying this strategy.</span>
+            <span className="inline-flex items-center gap-1 font-medium">
+              My subscriptions <ArrowRight className="h-3.5 w-3.5" />
+            </span>
+          </Link>
         )}
       </CardContent>
     </Card>

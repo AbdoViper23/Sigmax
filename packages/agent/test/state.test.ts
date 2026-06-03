@@ -3,10 +3,9 @@ import { readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Hex } from "viem";
-import { MockCdr } from "@sigmax/cdr";
 import { PositionStore } from "../src/state.js";
 import type { OpenPosition } from "../src/ports.js";
-import { makeSignal, WETH, USDC, TP, SL } from "./helpers.js";
+import { FakeCdr, makeSignal, WETH, USDC, TP, SL } from "./helpers.js";
 
 const FOLLOWER = "0x00000000000000000000000000000000000000aa" as Hex;
 const VAULT = "0x00000000000000000000000000000000000000a1" as Hex;
@@ -14,7 +13,7 @@ const VAULT = "0x00000000000000000000000000000000000000a1" as Hex;
 describe("PositionStore — persistence excludes secrets, reconcile re-derives them from CDR", () => {
   it("persists only non-secret metadata, then restores TP/SL by re-reading the CDR vault", async () => {
     const statePath = join(tmpdir(), `sigmax-state-${process.pid}.json`);
-    const cdr = new MockCdr({ hasLicense: true });
+    const cdr = new FakeCdr();
     const { uuid } = await cdr.publishSignal(makeSignal()); // CDR holds the secret thresholds
 
     const store1 = new PositionStore(statePath);
@@ -22,6 +21,7 @@ describe("PositionStore — persistence excludes secrets, reconcile re-derives t
     const pos: OpenPosition = {
       signalId: "sig-1",
       uuid,
+      venue: "arbitrum",
       follower: FOLLOWER,
       vault: VAULT,
       token: WETH,

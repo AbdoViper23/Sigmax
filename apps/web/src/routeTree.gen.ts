@@ -8,114 +8,120 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-import { Route as rootRouteImport } from "./routes/__root";
-import { Route as LeaderboardRouteImport } from "./routes/leaderboard";
-import { Route as LeaderRouteImport } from "./routes/leader";
-import { Route as FollowerRouteImport } from "./routes/follower";
-import { Route as IndexRouteImport } from "./routes/index";
-import { Route as StrategyIdRouteImport } from "./routes/strategy.$id";
+import { Route as rootRouteImport } from './routes/__root'
+import { Route as LeaderboardRouteImport } from './routes/leaderboard'
+import { Route as LeaderRouteImport } from './routes/leader'
+import { Route as FollowerRouteImport } from './routes/follower'
+import { Route as IndexRouteImport } from './routes/index'
+import { Route as StrategyIdRouteImport } from './routes/strategy.$id'
 
 const LeaderboardRoute = LeaderboardRouteImport.update({
-  id: "/leaderboard",
-  path: "/leaderboard",
+  id: '/leaderboard',
+  path: '/leaderboard',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const LeaderRoute = LeaderRouteImport.update({
-  id: "/leader",
-  path: "/leader",
+  id: '/leader',
+  path: '/leader',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const FollowerRoute = FollowerRouteImport.update({
-  id: "/follower",
-  path: "/follower",
+  id: '/follower',
+  path: '/follower',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const IndexRoute = IndexRouteImport.update({
-  id: "/",
-  path: "/",
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const StrategyIdRoute = StrategyIdRouteImport.update({
-  id: "/strategy/$id",
-  path: "/strategy/$id",
+  id: '/strategy/$id',
+  path: '/strategy/$id',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 
 export interface FileRoutesByFullPath {
-  "/": typeof IndexRoute;
-  "/follower": typeof FollowerRoute;
-  "/leader": typeof LeaderRoute;
-  "/leaderboard": typeof LeaderboardRoute;
-  "/strategy/$id": typeof StrategyIdRoute;
+  '/': typeof IndexRoute
+  '/follower': typeof FollowerRoute
+  '/leader': typeof LeaderRoute
+  '/leaderboard': typeof LeaderboardRoute
+  '/strategy/$id': typeof StrategyIdRoute
 }
 export interface FileRoutesByTo {
-  "/": typeof IndexRoute;
-  "/follower": typeof FollowerRoute;
-  "/leader": typeof LeaderRoute;
-  "/leaderboard": typeof LeaderboardRoute;
-  "/strategy/$id": typeof StrategyIdRoute;
+  '/': typeof IndexRoute
+  '/follower': typeof FollowerRoute
+  '/leader': typeof LeaderRoute
+  '/leaderboard': typeof LeaderboardRoute
+  '/strategy/$id': typeof StrategyIdRoute
 }
 export interface FileRoutesById {
-  __root__: typeof rootRouteImport;
-  "/": typeof IndexRoute;
-  "/follower": typeof FollowerRoute;
-  "/leader": typeof LeaderRoute;
-  "/leaderboard": typeof LeaderboardRoute;
-  "/strategy/$id": typeof StrategyIdRoute;
+  __root__: typeof rootRouteImport
+  '/': typeof IndexRoute
+  '/follower': typeof FollowerRoute
+  '/leader': typeof LeaderRoute
+  '/leaderboard': typeof LeaderboardRoute
+  '/strategy/$id': typeof StrategyIdRoute
 }
 export interface FileRouteTypes {
-  fileRoutesByFullPath: FileRoutesByFullPath;
-  fullPaths: "/" | "/follower" | "/leader" | "/leaderboard" | "/strategy/$id";
-  fileRoutesByTo: FileRoutesByTo;
-  to: "/" | "/follower" | "/leader" | "/leaderboard" | "/strategy/$id";
-  id: "__root__" | "/" | "/follower" | "/leader" | "/leaderboard" | "/strategy/$id";
-  fileRoutesById: FileRoutesById;
+  fileRoutesByFullPath: FileRoutesByFullPath
+  fullPaths: '/' | '/follower' | '/leader' | '/leaderboard' | '/strategy/$id'
+  fileRoutesByTo: FileRoutesByTo
+  to: '/' | '/follower' | '/leader' | '/leaderboard' | '/strategy/$id'
+  id:
+    | '__root__'
+    | '/'
+    | '/follower'
+    | '/leader'
+    | '/leaderboard'
+    | '/strategy/$id'
+  fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute;
-  FollowerRoute: typeof FollowerRoute;
-  LeaderRoute: typeof LeaderRoute;
-  LeaderboardRoute: typeof LeaderboardRoute;
-  StrategyIdRoute: typeof StrategyIdRoute;
+  IndexRoute: typeof IndexRoute
+  FollowerRoute: typeof FollowerRoute
+  LeaderRoute: typeof LeaderRoute
+  LeaderboardRoute: typeof LeaderboardRoute
+  StrategyIdRoute: typeof StrategyIdRoute
 }
 
-declare module "@tanstack/react-router" {
+declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    "/leaderboard": {
-      id: "/leaderboard";
-      path: "/leaderboard";
-      fullPath: "/leaderboard";
-      preLoaderRoute: typeof LeaderboardRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
-    "/leader": {
-      id: "/leader";
-      path: "/leader";
-      fullPath: "/leader";
-      preLoaderRoute: typeof LeaderRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
-    "/follower": {
-      id: "/follower";
-      path: "/follower";
-      fullPath: "/follower";
-      preLoaderRoute: typeof FollowerRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
-    "/": {
-      id: "/";
-      path: "/";
-      fullPath: "/";
-      preLoaderRoute: typeof IndexRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
-    "/strategy/$id": {
-      id: "/strategy/$id";
-      path: "/strategy/$id";
-      fullPath: "/strategy/$id";
-      preLoaderRoute: typeof StrategyIdRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
+    '/leaderboard': {
+      id: '/leaderboard'
+      path: '/leaderboard'
+      fullPath: '/leaderboard'
+      preLoaderRoute: typeof LeaderboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/leader': {
+      id: '/leader'
+      path: '/leader'
+      fullPath: '/leader'
+      preLoaderRoute: typeof LeaderRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/follower': {
+      id: '/follower'
+      path: '/follower'
+      fullPath: '/follower'
+      preLoaderRoute: typeof FollowerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/strategy/$id': {
+      id: '/strategy/$id'
+      path: '/strategy/$id'
+      fullPath: '/strategy/$id'
+      preLoaderRoute: typeof StrategyIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -125,17 +131,17 @@ const rootRouteChildren: RootRouteChildren = {
   LeaderRoute: LeaderRoute,
   LeaderboardRoute: LeaderboardRoute,
   StrategyIdRoute: StrategyIdRoute,
-};
+}
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
-  ._addFileTypes<FileRouteTypes>();
+  ._addFileTypes<FileRouteTypes>()
 
-import type { getRouter } from "./router.tsx";
-import type { startInstance } from "./start.ts";
-declare module "@tanstack/react-start" {
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
   interface Register {
-    ssr: true;
-    router: Awaited<ReturnType<typeof getRouter>>;
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>;
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
   }
 }
