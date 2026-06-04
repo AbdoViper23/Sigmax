@@ -25,10 +25,6 @@ function Index() {
     <main>
       {/* Hero */}
       <section className="mx-auto max-w-6xl px-4 py-20 md:py-28">
-        <p className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-xs text-muted-foreground">
-          <span className="h-1.5 w-1.5 rounded-full bg-success" /> Spot-only · Non-custodial ·
-          Verifiable
-        </p>
         <h1 className="max-w-3xl text-5xl font-semibold tracking-tight md:text-6xl">
           Copy verified traders.{" "}
           <span className="text-muted-foreground">Without trusting them.</span>
