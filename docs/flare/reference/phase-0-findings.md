@@ -8,6 +8,8 @@ Living record of what the spikes confirm. Feeds the Phase 1 deploy and Phase 2/3
 - **AssetManagerFXRP:** `0xc1Ca88b937d0b528842F95d5731ffB586f4fbDFA`.
 - **ContractRegistry:** `0xaD67FE66660Fb8dFE9d6b1b4240d8650e30F6019`.
 - **FTSO XRP/USD feed id:** `0x015852502f55534400000000000000000000000000`.
+- **FtsoV2 (Coston2):** `0xC4e9c78EA53db782E28f28Fdf80BaF59336B304d` — XRP/USD is readable as a **fee-free view** via `getFeedById` (sample: value `1104445`, decimals `6` → ≈ $1.10). min-out bounding confirmed feasible.
+- **BlazeSwap router (Coston2):** `0x8D29b61C41CF318d15d031BE2928F79630e068e6` — confirmed deployed (has bytecode). Uniswap-V2-compatible; the Phase 0b swap venue. No self-deployed pool needed unless the FXRP/USDT0 pair lacks liquidity.
 
 ## Signal encryption scheme (pinned)
 From fce-sign `go/tools/cmd/run-test/main.go`: **go-ethereum ECIES** — `ecies.Encrypt(pub, msg, nil, nil)`
