@@ -1,0 +1,238 @@
+# Flare Developer Hub
+
+> Official documentation for Flare.
+
+This file contains links to documentation sections following the llmstxt.org standard.
+
+## Table of Contents
+
+- [Flare Developer Hub](https://dev.flare.network/): Official documentation for Flare.
+- [Network](https://dev.flare.network/network/overview.md): Learn about the different Flare networks, configuration, supported wallets, transaction format, smart contracts, consensus, and more.
+- [Getting Started](https://dev.flare.network/network/getting-started.md): Deploy a smart contract on Flare using your browser.
+- [Developer Tools](https://dev.flare.network/network/developer-tools.md): Developer tools for Flare including RPCs, bridges, wallet SDKs, and more.
+- [Governance](https://dev.flare.network/network/governance.md): Overview of governance in the Flare Systems Protocol.
+- [Consensus](https://dev.flare.network/network/consensus.md): Learn the basics of the consensus protocol running on Flare.
+- [Network Reference](https://dev.flare.network/network/solidity-reference.md): Solidity reference for Flare contracts.
+- [Flare Systems Protocol](https://dev.flare.network/network/fsp.md): Foundational architecture supporting Flare's enshrined protocols.
+- [Flare Transaction SDK](https://dev.flare.network/network/flare-tx-sdk.md): Software Development Kit for performing common operations on Flare.
+- [Getting Started](https://dev.flare.network/network/flare-tx-sdk/getting-started.md): Connect the SDK to MetaMask, Ledger, Trezor, and more.
+- [Cookbook](https://dev.flare.network/network/flare-tx-sdk/cookbook.md): Recipes for all common SDK operations.
+- [Advanced Usage](https://dev.flare.network/network/flare-tx-sdk/advanced-usage.md): Lifecycle tracking, custom wallets, and advanced features.
+- [Weights and Signing](https://dev.flare.network/network/fsp/weights-and-signing.md): Defines the structure, voting, and weight calculations for FSP.
+- [Rewarding](https://dev.flare.network/network/fsp/rewarding.md): Explains the structure for distributing rewards in FSP.
+- [System Protocols](https://dev.flare.network/network/fsp/system-protocols.md): Describes the core protocols comprising FSP.
+- [Offchain Services](https://dev.flare.network/network/fsp/offchain-services.md): Outlines the architecture of offchain services supporting FSP.
+- [Protocol Parameters](https://dev.flare.network/network/fsp/protocol-parameters.md): Parameters of the sub-protocols comprising the FSP.
+- [FSP Reference](https://dev.flare.network/network/fsp/solidity-reference.md): Solidity reference for Flare contracts.
+- [Claiming rewards](https://dev.flare.network/network/fsp/guides/claiming-rewards.md): Instructions for data providers to claim rewards.
+- [Web2 FDC Setup](https://dev.flare.network/network/fsp/guides/web2-fdc-setup.md): Instructions for data providers to set up the Web2 FDC attestation type.
+- [Flare AI Skills](https://dev.flare.network/network/guides/flare-ai-skills.md): Use Flare AI Skills in Cursor, Claude Code, and other agents for domain knowledge on FTSO, FAssets, FDC, and Smart Accounts.
+- [Retrieving Contract Addresses](https://dev.flare.network/network/guides/flare-contracts-registry.md): Learn how to retrieve contract addresses on Flare Networks
+- [Flare Developer Hub MCP Server](https://dev.flare.network/network/guides/flare-developer-hub-mcp-server.md): Connect the Flare Developer Hub MCP server to Claude, Cursor, and other AI tools to get accurate Flare documentation in your AI assistant.
+- [Flare for Go Devs](https://dev.flare.network/network/guides/flare-for-go-developers.md): Learn how to interact with Flare using geth.
+- [Flare for JavaScript Devs](https://dev.flare.network/network/guides/flare-for-javascript-developers.md): Learn how to interact with Flare using web3.js.
+- [Flare for Python Devs](https://dev.flare.network/network/guides/flare-for-python-developers.md): Learn how to interact with Flare using web3.py.
+- [Flare for React Devs](https://dev.flare.network/network/guides/flare-for-react-developers.md): Learn how to interact with Flare using React and Wagmi.
+- [Flare for Rust Devs](https://dev.flare.network/network/guides/flare-for-rust-developers.md): Learn how to interact with Flare using alloy-rs.
+- [Gasless USD₮0 Transfers](https://dev.flare.network/network/guides/gasless-usdt0-transfers.md): Enable gasless USD₮0 transfers on Flare.
+- [Hardhat and Foundry Starter Kit](https://dev.flare.network/network/guides/hardhat-foundry-starter-kit.md): Integrate Flare into Hardhat and Foundry.
+- [Manage FlareDrops](https://dev.flare.network/network/guides/manage-flaredrops.md): Manage FlareDrop functionality in applications.
+- [Network Guides](https://dev.flare.network/network/guides/overview.md): Learn how to interact with Flare onchain and offchain.
+- [Secure Random Numbers](https://dev.flare.network/network/guides/secure-random-numbers.md): Use Flare's secure randomness in your application.
+- [Using Flare Stake Tool](https://dev.flare.network/network/guides/using-flare-stake-tool.md): Stake FLR using flare-stake-tool CLI.
+- [Wrapped Native Tokens](https://dev.flare.network/network/guides/wnat.md): Deposit and withdraw wrapped native tokens on Flare
+- [IDistributionToDelegators](https://dev.flare.network/network/solidity-reference/IDistributionToDelegators.md): Interface for managing FlareDrop claims.
+- [IEntityManager](https://dev.flare.network/network/fsp/solidity-reference/IEntityManager.md): Manages voter entities, including addresses and node IDs.
+- [IFlareSystemsCalculator](https://dev.flare.network/network/fsp/solidity-reference/IFlareSystemsCalculator.md): Performs calculations for weights and burn factors used by other contracts.
+- [IFlareSystemsManager](https://dev.flare.network/network/fsp/solidity-reference/IFlareSystemsManager.md): Manages system protocols like Signing Policy Definition, Uptime Voting, and Reward Voting.
+- [IRelay](https://dev.flare.network/network/fsp/solidity-reference/IRelay.md): Stores confirmed Merkle roots and signing policies.
+- [IRewardManager](https://dev.flare.network/network/fsp/solidity-reference/IRewardManager.md): Facilitates the claiming and distribution of rewards to voters, delegators, and stakers.
+- [ISubmission](https://dev.flare.network/network/fsp/solidity-reference/ISubmission.md): Manages prioritized and subsidized submissions for protocols.
+- [IVoterRegistry](https://dev.flare.network/network/fsp/solidity-reference/IVoterRegistry.md): Manages the registration of voters for upcoming reward epochs.
+- [IWNatDelegationFee](https://dev.flare.network/network/fsp/solidity-reference/IWNatDelegationFee.md): Manages the delegation fees set by voters for WFLR delegations.
+- [IClaimSetupManager](https://dev.flare.network/network/solidity-reference/IClaimSetupManager.md): Interface for managing reward claim setup.
+- [IFlareContractRegistry](https://dev.flare.network/network/solidity-reference/IFlareContractRegistry.md): Registry interface with all Flare contract addresses.
+- [IRNat](https://dev.flare.network/network/solidity-reference/IRNat.md): Interface for managing rFLR.
+- [IWNat](https://dev.flare.network/network/solidity-reference/IWNat.md): Interface for wrapping and unwrapping native tokens.
+- [ProtocolsV2Interface](https://dev.flare.network/network/solidity-reference/ProtocolsV2Interface.md): Primary interface for managing protocol related metadata.
+- [RandomNumberV2Interface](https://dev.flare.network/network/solidity-reference/RandomNumberV2Interface.md): Primary interface for random number generation.
+- [RewardsV2Interface](https://dev.flare.network/network/solidity-reference/RewardsV2Interface.md): Primary interface for managing all protocol rewards.
+- [FTSOv2](https://dev.flare.network/ftso/overview.md): FTSOv2 is an enshrined oracle that provides decentralized data feeds to the Flare network.
+- [Getting Started](https://dev.flare.network/ftso/getting-started.md): Learn how to consume FTSOv2 feeds on Flare using an onchain Solidity contract.
+- [Block-Latency Feeds](https://dev.flare.network/ftso/feeds.md): FTSOv2's block-latency feeds update incrementally with each new block on Flare, approximately every 1.8 seconds.
+- [Feed Stability & Risks](https://dev.flare.network/ftso/feed-stability-and-risks.md): Understand how block-latency feed stability and accuracy metrics are calculated and monitored.
+- [FTSOv2 Reference](https://dev.flare.network/ftso/solidity-reference.md): Solidity reference for FTSOv2 smart contracts.
+- [Migrating from v1](https://dev.flare.network/ftso/migration.md): Migration guide for dApps moving from FTSOv1 to FTSOv2.
+- [Migrate an app to FTSO](https://dev.flare.network/ftso/guides/adapters.md): Migrate your dApp from other oracles to FTSO.
+- [Build your first FTSOv2 app](https://dev.flare.network/ftso/guides/build-first-app.md): Use FTSOv2 in your Foundry or Hardhat project.
+- [Change quote feed](https://dev.flare.network/ftso/guides/change-quote-feed.md): Change block-latency quote feeds using Solidity.
+- [Create a Custom Feed](https://dev.flare.network/ftso/guides/create-custom-feed.md): Bring any time-series data onchain with Custom Feeds.
+- [Make a volatility incentive](https://dev.flare.network/ftso/guides/make-volatility-incentive.md): Make a volatility incentive using JS, Python, Rust, or Go.
+- [Query feed configuration](https://dev.flare.network/ftso/guides/query-feed-configuration.md): Query feed configuration using JS, Python, Rust, or Go.
+- [Read feeds offchain](https://dev.flare.network/ftso/guides/read-feeds-offchain.md): Read block-latency feeds using JS, Python, Rust, or Go.
+- [Scaling](https://dev.flare.network/ftso/scaling/overview.md): Scaling is an advanced framework designed to optimize the functionality and efficiency of FTSOv2.
+- [Getting Started](https://dev.flare.network/ftso/scaling/getting-started.md): Learn how to consume Scaling feeds on Flare.
+- [Anchor Feeds](https://dev.flare.network/ftso/scaling/anchor-feeds.md): Scaling anchor feeds update every voting epoch on Flare, approximately every 90s.
+- [Scaling Reference](https://dev.flare.network/ftso/scaling/solidity-reference.md): Solidity reference for Scaling smart contracts.
+- [Data Availability Api](https://dev.flare.network/ftso/scaling/solidity-reference/data-availability-api.md): OpenAPI specification for Data Availability API.
+- [IFtsoFeedPublisher](https://dev.flare.network/ftso/scaling/solidity-reference/IFtsoFeedPublisher.md): FtsoFeedPublisher interface.
+- [IFtsoInflationConfigurations](https://dev.flare.network/ftso/scaling/solidity-reference/IFtsoInflationConfigurations.md): FtsoInflationConfigurations interface.
+- [IFtsoRewardOffersManager](https://dev.flare.network/ftso/scaling/solidity-reference/IFtsoRewardOffersManager.md): FtsoRewardOffersManager interface.
+- [FtsoV2Interface](https://dev.flare.network/ftso/solidity-reference/FtsoV2Interface.md): Primary interface for interacting with FTSOv2.
+- [IFastUpdateIncentiveManager](https://dev.flare.network/ftso/solidity-reference/IFastUpdateIncentiveManager.md): Interface for making volatility incentive offers.
+- [IFastUpdater](https://dev.flare.network/ftso/solidity-reference/IFastUpdater.md): Interface for updating block-latency feeds.
+- [IFastUpdatesConfiguration](https://dev.flare.network/ftso/solidity-reference/IFastUpdatesConfiguration.md): Interface for the block-latency feed configuration.
+- [IFeeCalculator](https://dev.flare.network/ftso/solidity-reference/IFeeCalculator.md): Interface for calculating block-latency feed fees.
+- [IFtsoFeedIdConverter](https://dev.flare.network/ftso/solidity-reference/IFtsoFeedIdConverter.md): Interface for converting feed names to feed ids.
+- [FDC](https://dev.flare.network/fdc/overview.md): The Flare Data Connector (FDC) enables secure, onchain attestation of external data.
+- [Getting Started](https://dev.flare.network/fdc/getting-started.md): Learn how to verify data from other chains using FDC.
+- [Attestation Types](https://dev.flare.network/fdc/attestation-types.md): Learn about different attestation types supported by FDC.
+- [FDC Reference](https://dev.flare.network/fdc/reference.md): Solidity reference for FDC smart contracts.
+- [Troubleshooting](https://dev.flare.network/fdc/troubleshooting.md): Common issues and solutions when working with the Flare Data Connector.
+- [AddressValidity](https://dev.flare.network/fdc/attestation-types/address-validity.md): Validates if a string is a legitimate external blockchain address.
+- [BalanceDecreasingTransaction](https://dev.flare.network/fdc/attestation-types/balance-decreasing-transaction.md): Detects a transaction decreasing the balance of an address.
+- [ConfirmedBlockHeightExists](https://dev.flare.network/fdc/attestation-types/confirmed-block-height-exists.md): Assertion whether a specified block number is confirmed.
+- [EVMTransaction](https://dev.flare.network/fdc/attestation-types/evm-transaction.md): Information about an EVM transaction including events.
+- [Payment](https://dev.flare.network/fdc/attestation-types/payment.md): Information about native token payments on an external chain.
+- [ReferencedPaymentNonexistence](https://dev.flare.network/fdc/attestation-types/referenced-payment-nonexistence.md): Payment due by the agreed deadline has not been made.
+- [Web2Json](https://dev.flare.network/fdc/attestation-types/web2-json.md): Data retrieval from Web2 JSON APIs with JQ transformations.
+- [XRPPaymentNonexistence](https://dev.flare.network/fdc/attestation-types/xrp-payment-nonexistence.md): An XRP payment matching memo data and/or destination tag was not made by the deadline.
+- [XRPPayment](https://dev.flare.network/fdc/attestation-types/xrp-payment.md): Information about an XRP Ledger payment, including memo data and destination tag.
+- [FDC by hand](https://dev.flare.network/fdc/guides/fdc-by-hand.md): Learn how to use FDC without the help of scripts.
+- [AddressValidity](https://dev.flare.network/fdc/guides/foundry/address-validity.md): Check the validity of a Bitcoin, Dogecoin, or XRPL address.
+- [EVMTransaction](https://dev.flare.network/fdc/guides/foundry/evm-transaction.md): Retrieve the transaction data from Ethereum, Flare, or Songbird.
+- [Payment](https://dev.flare.network/fdc/guides/foundry/payment.md): Retrieve a Payment transaction data from Bitcoin, Dogecoin, or XRPL.
+- [Web2Json](https://dev.flare.network/fdc/guides/foundry/web2-json.md): Retrieve arbitrary Web2 data.
+- [Proof of Reserves](https://dev.flare.network/fdc/guides/foundry/proof-of-reserves.md): A cross-chain Proof of Reserves dApp using the EVMTransaction and Web2Json attestation types.
+- [Weather Insurance](https://dev.flare.network/fdc/guides/foundry/weather-insurance.md): A weather insurance dApp example.
+- [Web2Json for Custom API](https://dev.flare.network/fdc/guides/foundry/web2-json-for-custom-api.md): Retrieve arbitrary Web2 data.
+- [Cross-Chain Payment](https://dev.flare.network/fdc/guides/foundry/cross-chain-payment.md): Use an EVMTransaction proof to verify a payment on another chain and mint an NFT.
+- [Cross-Chain FDC](https://dev.flare.network/fdc/guides/foundry/cross-chain-fdc.md): Use the FDC data on a non-Flare, like the XRPL EVM Sidechain.
+- [AddressValidity](https://dev.flare.network/fdc/guides/hardhat/address-validity.md): Check the validity of a Bitcoin, Dogecoin, or XRPL address.
+- [EVMTransaction](https://dev.flare.network/fdc/guides/hardhat/evm-transaction.md): Retrieve the transaction data from Ethereum, Flare, or Songbird.
+- [Payment](https://dev.flare.network/fdc/guides/hardhat/payment.md): Retrieve a Payment transaction data from Bitcoin, Dogecoin, or XRPL.
+- [Web2Json](https://dev.flare.network/fdc/guides/hardhat/web2-json.md): Retrieve arbitrary Web2 data.
+- [Proof of Reserves](https://dev.flare.network/fdc/guides/hardhat/proof-of-reserves.md): Verifying stablecoin reserves with FDC.
+- [Weather Insurance](https://dev.flare.network/fdc/guides/hardhat/weather-insurance.md): A weather insurance dApp example.
+- [Web2Json for Custom API](https://dev.flare.network/fdc/guides/hardhat/web2-json-for-custom-api.md): Retrieve arbitrary Web2 data.
+- [URL Parsing Security](https://dev.flare.network/fdc/guides/url-parsing-security.md): Secure URL validation patterns for FDC Web2Json attestations to prevent MitM attacks.
+- [IAddressValidity](https://dev.flare.network/fdc/reference/IAddressValidity.md): Assert whether a string represents a valid address.
+- [IBalanceDecreasingTransaction](https://dev.flare.network/fdc/reference/IBalanceDecreasingTransaction.md): Detect a transaction that decreases an address balance.
+- [IConfirmedBlockHeightExists](https://dev.flare.network/fdc/reference/IConfirmedBlockHeightExists.md): Assert that a block number is confirmed.
+- [IEVMTransaction](https://dev.flare.network/fdc/reference/IEVMTransaction.md): Relay a transaction from an EVM chain.
+- [IPayment](https://dev.flare.network/fdc/reference/IPayment.md): Relay a transaction in native currency.
+- [IReferencedPaymentNonexistence](https://dev.flare.network/fdc/reference/IReferencedPaymentNonexistence.md): Assert whether an agreed-upon payment has not been made.
+- [IWeb2Json](https://dev.flare.network/fdc/reference/IWeb2Json.md): Attestation type that fetches JSON over HTTP, applies a jq filter, and returns ABI-encoded data.
+- [IWeb2JsonVerification](https://dev.flare.network/fdc/reference/IWeb2JsonVerification.md): Verifier interface for Web2Json proofs.
+- [IXRPPayment](https://dev.flare.network/fdc/reference/IXRPPayment.md): Relay an XRPL Payment transaction with memo and destination tag.
+- [IXRPPaymentNonexistence](https://dev.flare.network/fdc/reference/IXRPPaymentNonexistence.md): Assert that an XRP payment matching memo and/or destination tag was not made.
+- [Data Availability Api](https://dev.flare.network/fdc/reference/data-availability-api.md): OpenAPI specification for Data Availability API.
+- [IFdcHub](https://dev.flare.network/fdc/reference/IFdcHub.md): Primary interface for interacting with FDC.
+- [IFdcInflationConfigurations](https://dev.flare.network/fdc/reference/IFdcInflationConfigurations.md): Interface for managing FDC inflation configuration.
+- [IFdcRequestFeeConfigurations](https://dev.flare.network/fdc/reference/IFdcRequestFeeConfigurations.md): Interface for managing FDC request fee configuration.
+- [IFdcVerification](https://dev.flare.network/fdc/reference/IFdcVerification.md): Interface for verifying FDC requests.
+- [FAssets](https://dev.flare.network/fassets/overview.md): FAssets is a trustless over-collateralized bridge to non smart contract networks to Flare.
+- [Minting](https://dev.flare.network/fassets/minting.md): Understand how minting works in FAssets.
+- [Redemption](https://dev.flare.network/fassets/redemption.md): Understand how redemptions work in FAssets.
+- [Collateral](https://dev.flare.network/fassets/collateral.md): Understand how collateral works in FAssets.
+- [Core Vault](https://dev.flare.network/fassets/core-vault.md): Understanding the Core Vault system in FAssets
+- [Liquidation](https://dev.flare.network/fassets/liquidation.md): Understand how liquidations work in FAssets.
+- [Emergency Pause System](https://dev.flare.network/fassets/emergency-pause.md): FAssets emergency pause system
+- [Operational Parameters](https://dev.flare.network/fassets/operational-parameters.md): Songbird FAssets Operational Parameters
+- [FAssets Reference](https://dev.flare.network/fassets/reference.md): Solidity reference for FAssets smart contracts.
+- [Get FXRP Asset Manager Address](https://dev.flare.network/fassets/developer-guides/fassets-asset-manager-address-contracts-registry.md): Get FXRP asset manager address from registry
+- [Redeem FAssets](https://dev.flare.network/fassets/developer-guides/fassets-redeem.md): Learn how to redeem FAssets
+- [Swap and Redeem FAssets](https://dev.flare.network/fassets/developer-guides/fassets-swap-redeem.md): Learn how to swap and redeem FAssets
+- [Monitor Redemptions & Execute Defaults](https://dev.flare.network/fassets/developer-guides/fassets-redemption-default.md): Monitor and handle redemption scenarios
+- [Get Redemption Queue](https://dev.flare.network/fassets/developer-guides/fassets-redemption-queue.md): Learn how to get the redemption queue
+- [List FAssets Agents](https://dev.flare.network/fassets/developer-guides/fassets-list-agents.md): Learn how to get a list of FAssets agents
+- [Read FAssets Agent Details](https://dev.flare.network/fassets/developer-guides/fassets-agent-details.md): Learn how to read FAssets agent details
+- [Read FAssets Settings (Solidity)](https://dev.flare.network/fassets/developer-guides/fassets-settings-solidity.md): Fetch FAsset Lot Size and Value in USD (via FTSO)
+- [Read FAssets Settings (Node)](https://dev.flare.network/fassets/developer-guides/fassets-settings-node.md): Fetch FAsset Lot Size and Value in USD (via FTSO)
+- [Mint FXRP](https://dev.flare.network/fassets/developer-guides/fassets-mint.md): Mint FXRP in a single XRPL payment.
+- [Mint FXRP with Tag](https://dev.flare.network/fassets/developer-guides/fassets-mint-tag.md): Mint FXRP using a reserved XRPL destination tag.
+- [Check Minting Limits](https://dev.flare.network/fassets/developer-guides/fassets-mint-limits.md): Read live minting rate limits and pre-flight a mint against hourly, daily, and large-mint delays.
+- [Transfer a Minting Tag](https://dev.flare.network/fassets/developer-guides/fassets-mint-tag-transfer.md): Transfer an existing minting tag NFT to another owner.
+- [Redeem FXRP by Amount](https://dev.flare.network/fassets/developer-guides/fassets-redeem-amount.md): Redeem any amount of FXRP without rounding to whole lots.
+- [Redeem FXRP with Tag](https://dev.flare.network/fassets/developer-guides/fassets-redeem-with-tag.md): Redeem any amount of FXRP and require an XRPL destination tag on the agent's payment.
+- [Developer Guides](https://dev.flare.network/fassets/developer-guides.md): Step-by-step guides for building with FAssets
+- [IAgentOwnerRegistry](https://dev.flare.network/fassets/reference/IAgentOwnerRegistry.md): FAssets IAgentOwnerRegistry interface reference.
+- [IAgentPing](https://dev.flare.network/fassets/reference/IAgentPing.md): On-chain liveness ping/response between users and FAssets agent bots.
+- [IAssetManager](https://dev.flare.network/fassets/reference/IAssetManager.md): FAssets IAssetManager interface reference.
+- [IAssetManagerController](https://dev.flare.network/fassets/reference/IAssetManagerController.md): FAssets IAssetManagerController interface reference.
+- [IAssetManagerEvents](https://dev.flare.network/fassets/reference/IAssetManagerEvents.md): FAssets IAssetManager interface reference.
+- [ICollateralPool](https://dev.flare.network/fassets/reference/ICollateralPool.md): FAssets ICollateralPool interface reference.
+- [ICoreVaultClient](https://dev.flare.network/fassets/reference/ICoreVaultClient.md): Agent-facing interface for transferring backing assets into and out of the FAssets core vault.
+- [ICoreVaultManager](https://dev.flare.network/fassets/reference/ICoreVaultManager.md): FAssets ICoreVaultManager interface reference.
+- [IFAsset](https://dev.flare.network/fassets/reference/IFAsset.md): ERC-20 plus FAsset-specific metadata for FXRP / FBTC / FDOGE / FLTC tokens.
+- [IMintingTagManager](https://dev.flare.network/fassets/reference/IMintingTagManager.md): FAssets IMintingTagManager interface reference.
+- [Minting Troubleshooting](https://dev.flare.network/fassets/troubleshooting/minting-troubleshooting.md): Quick reference and full troubleshooting guide for FXRP minting — pre-flight checks, errors, delays, and recovery.
+- [Get Firelight Vault Status](https://dev.flare.network/fxrp/firelight/status.md): Learn how to get Firelight vault status
+- [Deposit Assets into Firelight Vault](https://dev.flare.network/fxrp/firelight/deposit.md): Learn how to deposit assets into a Firelight vault
+- [Mint Firelight Vault Shares](https://dev.flare.network/fxrp/firelight/mint.md): Learn how to mint Firelight vault shares
+- [Withdraw Assets from Firelight Vault](https://dev.flare.network/fxrp/firelight/withdraw.md): Learn how to withdraw assets from a Firelight vault
+- [Redeem Assets from Firelight Vault](https://dev.flare.network/fxrp/firelight/redeem.md): Learn how to redeem assets from a Firelight vault
+- [Claim Withdrawals from Firelight Vault](https://dev.flare.network/fxrp/firelight/claim.md): Learn how to claim pending withdrawals from a Firelight vault
+- [Firelight Vaults](https://dev.flare.network/fxrp/firelight.md): Learn how to interact with Firelight vaults, ERC-4626 vaults compatible with FXRP.
+- [Auto Minting and Bridging FXRP](https://dev.flare.network/fxrp/oft/fxrp-automint.md): Mint and bridge FXRP using Flare Smart Accounts
+- [FAsset Auto-Redemption](https://dev.flare.network/fxrp/oft/fxrp-autoredeem.md): Auto-redeem FAssets to native XRP cross-chain
+- [Omnichain Fungible Token (OFT)](https://dev.flare.network/fxrp/oft.md): FXRP is an Omnichain Fungible Token (OFT) enabling cross-chain transfers via LayerZero
+- [FXRP](https://dev.flare.network/fxrp/overview.md): Explore what you can do with FXRP, the FAsset representation of XRP on Flare.
+- [FXRP Operational Parameters](https://dev.flare.network/fxrp/parameters.md): FXRP operational parameters on Flare Mainnet and Testnet.
+- [Get FXRP Address](https://dev.flare.network/fxrp/token-interactions/fxrp-address.md): Get FXRP address using the FAssets system
+- [x402 Payment Protocol](https://dev.flare.network/fxrp/token-interactions/x402-payments.md): Implement HTTP-native payments using the x402 protocol with EIP-3009
+- [Gasless FXRP Payments](https://dev.flare.network/fxrp/token-interactions/gasless-fxrp-payments.md): Transfer FXRP without gas using EIP-712 signed meta-transactions and a relayer.
+- [Get Upshift Vault Status](https://dev.flare.network/fxrp/upshift/status.md): Learn how to get Upshift vault status
+- [Deposit Assets into Upshift Vault](https://dev.flare.network/fxrp/upshift/deposit.md): Learn how to deposit assets into an Upshift vault
+- [Instant Redeem from Upshift Vault](https://dev.flare.network/fxrp/upshift/instant-redeem.md): Learn how to instantly redeem LP tokens from an Upshift vault
+- [Request Redeem from Upshift Vault](https://dev.flare.network/fxrp/upshift/request-redeem.md): Learn how to request a delayed redemption from an Upshift vault
+- [Claim Redemption from Upshift Vault](https://dev.flare.network/fxrp/upshift/claim.md): Learn how to claim assets from a previously requested Upshift vault redemption
+- [Upshift Vaults](https://dev.flare.network/fxrp/upshift.md): Learn how to interact with Upshift vaults, ERC-4626 vaults compatible with FXRP.
+- [Flare Smart Accounts](https://dev.flare.network/smart-accounts/overview.md): The Flare Smart Accounts is an account abstraction that performs actions on behalf of XRPL users.
+- [FAsset Instructions](https://dev.flare.network/smart-accounts/fasset-instructions.md): Using Flare Smart Accounts in the FAssets workflow.
+- [Custom Instruction](https://dev.flare.network/smart-accounts/custom-instruction.md): Performing custom function calls in Flare Smart Accounts via XRPL payments with an off-chain executor.
+- [Memo Field Custom Instruction](https://dev.flare.network/smart-accounts/memo-field-custom-instruction.md): Performing custom function calls in the Flare Smart Accounts by carrying the full PackedUserOperation in the XRPL memo.
+- [Custom Instruction Comparison](https://dev.flare.network/smart-accounts/custom-instruction-comparison.md): Comparing the memo field (0xFF) and hash-based (0xFE) custom instruction flows for Flare Smart Accounts.
+- [Smart Accounts Reference](https://dev.flare.network/smart-accounts/reference.md): Solidity reference for Flare Smart Accounts smart contracts.
+- [Introduction](https://dev.flare.network/smart-accounts/guides/cli/introduction.md): Introduction to the Flare Smart Accounts CLI.
+- [FAssets Cycle](https://dev.flare.network/smart-accounts/guides/cli/fassets-cycle.md): An overview of the FAssets cycle with the use of Flare Smart Accounts.
+- [Mint to any Address](https://dev.flare.network/smart-accounts/guides/cli/mint-and-transfer.md): Mint FXRP and transfer it to a Flare address using the Flare Smart Accounts CLI.
+- [State Lookup](https://dev.flare.network/smart-accounts/guides/typescript-viem/state-lookup-ts.md): Reading the smart-accounts-related states from the Flare chain using Viem.
+- [Custom Instruction](https://dev.flare.network/smart-accounts/guides/typescript-viem/custom-instruction-ts.md): Sending custom smart account instructions via XRPL using Viem and an off-chain executor.
+- [Memo Field Custom Instruction](https://dev.flare.network/smart-accounts/guides/typescript-viem/memo-field-custom-instruction-ts.md): Sending the full PackedUserOperation in an XRPL memo with Viem (0xFF flow).
+- [Cross-Chain Mint](https://dev.flare.network/smart-accounts/guides/typescript-viem/cross-chain-mint-ts.md): Mint FXRP from XRP and bridge it to Sepolia in a single flow using Viem and LayerZero.
+- [Cross-Chain Redeem](https://dev.flare.network/smart-accounts/guides/typescript-viem/cross-chain-redeem-ts.md): Send FXRP from Sepolia back to Flare and auto-redeem it to XRP on the XRPL using Viem and LayerZero.
+- [Cross-Chain Redeem to Tag](https://dev.flare.network/smart-accounts/guides/typescript-viem/cross-chain-redeem-to-tag-ts.md): Send FXRP from Sepolia back to Flare and auto-redeem to an XRPL address with a destination tag.
+- [Recover Stuck Mint Transaction](https://dev.flare.network/smart-accounts/guides/typescript-viem/recover-stuck-mint-transaction-ts.md): Recover FXRP when a smart-account direct mint reverted or was never finalized, using the 0xE0 skip-memo flow with Viem.
+- [Fast-Forward Nonce](https://dev.flare.network/smart-accounts/guides/typescript-viem/fast-forward-nonce-ts.md): Advance a personal account's memo-instruction nonce when it is stuck after a partial or abandoned direct-mint flow, using the 0xE1 opcode with Viem.
+- [Control USDT0](https://dev.flare.network/smart-accounts/guides/typescript-viem/control-usdt0-ts.md): Transfer and swap USDT0 from a Flare personal account using fee-only 0xFE custom instructions with Viem.
+- [TypeScript + Viem](https://dev.flare.network/smart-accounts/guides/typescript-viem.md): Step-by-step TypeScript guides for Flare Smart Accounts using Viem, XRPL, and the Flare Data Connector.
+- [IMasterAccountController](https://dev.flare.network/smart-accounts/reference/IMasterAccountController.md): Flare Smart Accounts IMasterAccountController interface reference.
+- [IPersonalAccount](https://dev.flare.network/smart-accounts/reference/IPersonalAccount.md): Flare Smart Accounts IPersonalAccount interface reference.
+- [Flare Confidential Compute](https://dev.flare.network/fcc/overview.md): Flare Confidential Compute (FCC) extends the Flare blockchain with Trusted Execution Environments (TEEs) to enable secure off-chain computation, cr...
+- [Build Your First Extension](https://dev.flare.network/fcc/guides/getting-started.md): Start building Flare Confidential Compute extensions.
+- [Private Key Extension](https://dev.flare.network/fcc/guides/sign-extension.md): Build and deploy a TEE extension that stores a private key and signs messages on-chain.
+- [Weather Insurance Extension](https://dev.flare.network/fcc/guides/weather-insurance-extension.md): Build and deploy an extension that settles rainfall insurance.
+- [Check System Requirements](https://dev.flare.network/run-node/system-requirements.md): Minimum hardware requirements for running a node.
+- [Run Node from Source](https://dev.flare.network/run-node/from-source.md): Run a Flare node from go-flare source code.
+- [Run Node using Docker](https://dev.flare.network/run-node/using-docker.md): Run a Flare node using Docker.
+- [Register as Validator](https://dev.flare.network/run-node/register-validator.md): Register your node as a validator.
+- [Set Up Flare Entity](https://dev.flare.network/run-node/flare-entity.md): Provide data for Flare's enshrined FTSO and FDC protocols.
+- [Audits](https://dev.flare.network/support/audits.md): Independent security audits of the Flare Network codebase, protocols, and smart contracts.
+- [FAQs](https://dev.flare.network/support/faqs.md): Frequently Asked Questions for developers building on Flare.
+- [FLR](https://dev.flare.network/support/flr.md): Overview of Flare's token economics, allocation, and utility
+- [Terminology](https://dev.flare.network/support/terminology.md): Definitions of key terms used in the Flare network.
+- [Whitepapers](https://dev.flare.network/support/whitepapers.md): Explore Flare's whitepapers, research, and analytics to gain deeper insights into its technology.
+
+## Additional Pages
+
+- [Guides](https://dev.flare.network/fcc/guides.md)
+- [Guides](https://dev.flare.network/fdc/guides.md)
+- [Foundry](https://dev.flare.network/fdc/guides/foundry.md)
+- [Hardhat](https://dev.flare.network/fdc/guides/hardhat.md)
+- [Guides](https://dev.flare.network/ftso/guides.md)
+- [Token Interactions](https://dev.flare.network/fxrp/token-interactions.md)
+- [Guides](https://dev.flare.network/network/fsp/guides.md)
+- [Run Node](https://dev.flare.network/run-node.md)
+- [Guides](https://dev.flare.network/smart-accounts/guides.md)
+- [Cli](https://dev.flare.network/smart-accounts/guides/cli.md)

@@ -25,10 +25,11 @@ This project is being built for the **CDR Hackathon** (build.usecdr.dev, present
 
 These are product invariants. If a task would require breaking one of these, STOP and flag it.
 
-1. **SPOT ONLY.** No leverage, no perpetuals, no shorting, no margin, no borrowing — anywhere,
-   ever. The only on-chain action Sigmax performs is a swap between two whitelisted spot
-   tokens. This is enforced at the contract level (see `docs/contracts/10-copyvault.md`) and is also
-   the project's halal constraint (see `docs/security/71-spot-halal-constraints.md`).
+1. **SWAP-ONLY EXECUTION.** No leverage, perpetuals, shorting, margin, or borrowing — anywhere,
+   ever. The only on-chain trading action is a swap between two whitelisted tokens. This is enforced
+   at the contract level via the single `executeSwap` primitive (see `docs/contracts/10-copyvault.md`),
+   which keeps the permission/attack surface tiny and reduces regulatory "asset-management /
+   derivatives" exposure.
 2. **NON-CUSTODIAL.** The agent must NEVER hold, custody, or be able to withdraw follower funds.
    Funds live in the follower's own `CopyVault`. The agent gets only a scoped executor role that
    can call `executeSwap` within a token whitelist + caps. Only the vault owner can withdraw.
@@ -82,7 +83,6 @@ frontend/
 
 security/
   70-leakage-mitigation.md → on-chain strategy-leakage problem + mitigations
-  71-spot-halal-constraints.md → the spot-only constraint and how the contract enforces it
 
 engineering/
   80-mvp-scope.md         → what's in / out of the MVP + dependency graph

@@ -33,9 +33,8 @@ charge fairly and the buyers can't tell who's real.
   on-chain, so the leader's performance is **verifiable and tamper-proof**.
   → You can't fake a record that's written on-chain in advance.
 
-We focus on **spot trading only** — swaps between tokens, no leverage, no shorting. This keeps the
-permission surface tiny, makes the product safer, and aligns with a halal (asset-backed, no riba)
-constraint that also defines a clean, reachable initial audience.
+We focus on **token swaps only** — no leverage, no shorting. This keeps the permission surface
+tiny and the product safer, and reduces regulatory "asset-management / derivatives" exposure.
 
 ## 3. Why this is defensible (what's genuinely new)
 

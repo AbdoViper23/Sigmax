@@ -86,4 +86,4 @@ by batch-auction execution.** Over-claiming privacy is both false and a trust ri
 - ✅ user-facing copy states the honest privacy boundary (no "fully private" claims)
 - ✅ CoW path verified on Arbitrum at launch (or documented why deferred)
 
-→ Next: `71-spot-halal-constraints.md`.
+→ See `docs/flare/` for the current (Flare) design.

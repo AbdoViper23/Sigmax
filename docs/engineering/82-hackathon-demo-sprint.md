@@ -117,7 +117,7 @@ Read condition encoding: `readConditionData = abi.encode(licenseTokenAddress, ip
 - Replace relayer-trust eligibility with an on-chain guard / messaging (removes D1's software trust).
 - Real TEE + remote attestation consumed by something (operator-blindness).
 - Aggregated trade-history leakage (the alpha is reconstructable at scale — `security/70`).
-- Legal review (automated trading of others' funds; "halal" claim; royalty-token securities framing) before scaling past the first users.
+- Legal review (automated trading of others' funds; royalty-token securities framing) before scaling past the first users.
 
 ---
 

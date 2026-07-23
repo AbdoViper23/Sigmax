@@ -112,4 +112,4 @@ drives `93-gtm-first-20-users.md`.
 - ✅ leaderboard shows a verifiable record sourced from on-chain data
 - ✅ no API or page ever exposes signal logic / TP / SL
 
-→ Next: `security/70-leakage-mitigation.md`, `71-spot-halal-constraints.md`.
+→ Next: `security/70-leakage-mitigation.md`.
