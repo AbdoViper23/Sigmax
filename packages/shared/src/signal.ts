@@ -10,9 +10,16 @@ const uintStr = z.string().regex(/^\d+$/, "must be a non-negative integer string
 export const SignalAction = z.enum(["ENTRY", "EXIT"]);
 export type SignalActionT = z.infer<typeof SignalAction>;
 
-/** Where the swap executes. arbitrum = ERC-20 swap in the follower's CopyVault; hyperliquid = HyperCore spot. */
-export const SignalVenue = z.enum(["arbitrum", "hyperliquid"]);
+/**
+ * Where the swap executes. arbitrum = ERC-20 swap in the follower's CopyVault; hyperliquid = HyperCore
+ * spot; flare = FXRP↔USDT0 swap on a Coston2 DEX inside the follower's CopyVaultFlare.
+ */
+export const SignalVenue = z.enum(["arbitrum", "hyperliquid", "flare"]);
 export type SignalVenueT = z.infer<typeof SignalVenue>;
+
+/** Stable venue ↔ uint8 map for ABI encoding (append-only; never renumber existing venues). */
+const VENUE_TO_U8: Record<SignalVenueT, number> = { arbitrum: 0, hyperliquid: 1, flare: 2 };
+const U8_TO_VENUE = ["arbitrum", "hyperliquid", "flare"] as const;
 
 /**
  * The structured spot signal.
@@ -42,13 +49,13 @@ export const SignalSchema = z
     expiresAt: z.number().int().nonnegative(),
   })
   .superRefine((s, ctx) => {
-    // Arbitrum executes ERC-20 swaps → token/quoteToken MUST be EVM addresses. Hyperliquid trades
+    // arbitrum + flare execute ERC-20 swaps → token/quoteToken MUST be EVM addresses. Hyperliquid trades
     // spot markets by coin symbol → any non-empty symbol (validated live against spotMeta in the agent).
-    if (s.venue === "arbitrum") {
+    if (s.venue === "arbitrum" || s.venue === "flare") {
       if (!addressRe.test(s.token))
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["token"], message: "arbitrum token must be an EVM address" });
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["token"], message: `${s.venue} token must be an EVM address` });
       if (!addressRe.test(s.quoteToken))
-        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["quoteToken"], message: "arbitrum quoteToken must be an EVM address" });
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["quoteToken"], message: `${s.venue} quoteToken must be an EVM address` });
     }
   });
 export type Signal = z.infer<typeof SignalSchema>;
@@ -87,7 +94,7 @@ export function encodeSignal(input: Signal): Hex {
     uuidToBytes16(s.signalId),
     s.strategyId as Hex,
     s.chainId,
-    s.venue === "arbitrum" ? 0 : 1,
+    VENUE_TO_U8[s.venue],
     s.action === "ENTRY" ? 0 : 1,
     s.token,
     s.quoteToken,
@@ -108,7 +115,7 @@ export function decodeSignal(data: Hex): Signal {
     signalId: bytes16ToUuid(d[1]),
     strategyId: d[2],
     chainId: Number(d[3]),
-    venue: Number(d[4]) === 0 ? "arbitrum" : "hyperliquid",
+    venue: U8_TO_VENUE[Number(d[4])],
     action: Number(d[5]) === 0 ? "ENTRY" : "EXIT",
     token: d[6],
     quoteToken: d[7],

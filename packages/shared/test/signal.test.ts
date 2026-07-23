@@ -77,4 +77,46 @@ describe("signal encode/decode", () => {
     expect(() => SignalSchema.parse({ ...hlBase, token: "HYPE" })).not.toThrow();
     expect(() => SignalSchema.parse({ ...base, token: "HYPE" })).toThrow();
   });
+
+  it("round-trips a flare (FXRP) signal with EVM addresses", () => {
+    const flare: Signal = SignalSchema.parse({
+      version: 1,
+      signalId: "ffffffff-1111-2222-3333-444444444444",
+      strategyId: "0x77319B4031e6eF1250907aa00018B8B1c67a244b",
+      chainId: 114,
+      venue: "flare",
+      action: "ENTRY",
+      token: "0x0b6A3645c240605887a5532109323A3E12273dc7", // FXRP on Coston2
+      quoteToken: "0x1111111111111111111111111111111111111111", // USDT0 placeholder (EVM address)
+      sizeBps: 500,
+      maxEntryPrice: "0",
+      takeProfitPrice: "0",
+      stopLossPrice: "0",
+      issuedAt: 1748600000,
+      expiresAt: 1748686400,
+    });
+    const decoded = decodeSignal(encodeSignal(flare));
+    expect(decoded).toEqual(flare);
+    expect(decoded.venue).toBe("flare");
+  });
+
+  it("requires EVM addresses on flare (rejects a coin symbol)", () => {
+    const raw = {
+      version: 1,
+      signalId: "ffffffff-1111-2222-3333-444444444444",
+      strategyId: "0x77319B4031e6eF1250907aa00018B8B1c67a244b",
+      chainId: 114,
+      venue: "flare",
+      action: "ENTRY",
+      token: "FXRP",
+      quoteToken: "USDT0",
+      sizeBps: 500,
+      maxEntryPrice: "0",
+      takeProfitPrice: "0",
+      stopLossPrice: "0",
+      issuedAt: 1748600000,
+      expiresAt: 1748686400,
+    };
+    expect(() => SignalSchema.parse(raw)).toThrow();
+  });
 });
