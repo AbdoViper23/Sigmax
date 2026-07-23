@@ -25,18 +25,22 @@ function Index() {
     <main>
       {/* Hero */}
       <section className="mx-auto max-w-6xl px-4 py-20 md:py-28">
-        <h1 className="max-w-3xl text-5xl font-semibold tracking-tight md:text-6xl">
+        <h1 className="max-w-3xl animate-enter text-5xl font-semibold tracking-tight md:text-6xl">
           Copy verified traders.{" "}
           <span className="text-muted-foreground">Without trusting them.</span>
         </h1>
-        <p className="mt-5 max-w-2xl text-lg text-muted-foreground">
+        <p
+          className="mt-5 max-w-2xl animate-enter text-lg text-muted-foreground"
+          style={{ animationDelay: "80ms" }}
+        >
           Sigmax lets traders publish encrypted signals and followers auto-copy them inside their
           own vault. The strategy stays secret. Your funds never move out of your wallet's control.
         </p>
-        <div className="mt-8 flex flex-wrap gap-3">
-          <Button asChild size="lg">
+        <div className="mt-8 flex flex-wrap animate-enter gap-3" style={{ animationDelay: "160ms" }}>
+          <Button asChild size="lg" className="group">
             <Link to="/leaderboard">
-              Browse leaders <ArrowRight className="ml-1.5 h-4 w-4" />
+              Browse leaders
+              <ArrowRight className="ml-1.5 h-4 w-4 transition-transform duration-150 ease-out group-hover:translate-x-0.5" />
             </Link>
           </Button>
           <Button asChild size="lg" variant="outline">
@@ -47,7 +51,10 @@ function Index() {
 
       {/* Trust pillars */}
       <section className="border-t border-border bg-card/40">
-        <div className="mx-auto grid max-w-6xl gap-px bg-border px-0 md:grid-cols-3">
+        <div
+          className="mx-auto grid max-w-6xl animate-enter gap-px bg-border px-0 md:grid-cols-3"
+          style={{ animationDelay: "240ms" }}
+        >
           <Pillar
             icon={<ShieldCheck className="h-5 w-5" />}
             title="Funds stay in your vault"

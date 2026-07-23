@@ -40,7 +40,7 @@ export function LeaderCard({ leader }: { leader: Leader }) {
   return (
     <Card
       className={cn(
-        "group flex flex-col transition-colors hover:border-primary/40",
+        "group hover-lift flex flex-col hover:border-primary/40",
         test && "border-dashed border-warning/40 hover:border-warning/60",
       )}
     >
