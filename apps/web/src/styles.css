@@ -205,3 +205,92 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* ---------- Hero signal chart + sealed-strategy shimmer ---------- */
+
+/* Base state (also what reduced-motion users see): the finished curve, drawn and filled, dot
+   settled. Colors live here — not on SVG `stroke=`/`stopColor=` attributes — because var() is
+   unreliable inside SVG presentation attributes. */
+.signal-chart-line {
+  stroke: var(--color-success);
+}
+
+.signal-chart-dot,
+.signal-chart-pulse {
+  fill: var(--color-success);
+}
+
+.signal-chart-pulse {
+  opacity: 0; /* visible only mid-ping; hidden at rest and when motion is reduced */
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Line strokes itself on via a normalized path length (SignalChart sets pathLength={1}). */
+  .signal-chart-line {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    animation: signal-chart-draw 1100ms cubic-bezier(0, 0, 0.2, 1) 250ms forwards;
+  }
+
+  .signal-chart-area {
+    opacity: 0;
+    animation: signal-chart-fade 700ms ease-out 650ms forwards;
+  }
+
+  .signal-chart-dot {
+    opacity: 0;
+    animation: signal-chart-fade 350ms ease-out 1150ms forwards;
+  }
+
+  .signal-chart-pulse {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: signal-chart-ping 2200ms cubic-bezier(0, 0, 0.2, 1) 1400ms infinite;
+  }
+
+  /* Redacted strategy rows: a slow emerald glint reads as "encryption at work". */
+  .encrypted-bar {
+    background-image: linear-gradient(
+      90deg,
+      transparent 0%,
+      color-mix(in oklab, var(--color-success) 32%, transparent) 50%,
+      transparent 100%
+    );
+    background-size: 200% 100%;
+    background-repeat: no-repeat;
+    animation: encrypted-shimmer 2600ms ease-in-out infinite;
+  }
+}
+
+@keyframes signal-chart-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes signal-chart-fade {
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes signal-chart-ping {
+  0% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  70%,
+  100% {
+    transform: scale(3.4);
+    opacity: 0;
+  }
+}
+
+@keyframes encrypted-shimmer {
+  0% {
+    background-position: 150% 0;
+  }
+  100% {
+    background-position: -150% 0;
+  }
+}

@@ -11,6 +11,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { SignalChart } from "@/components/sigmax/SignalChart";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -191,9 +192,17 @@ function Index() {
   );
 }
 
+/**
+ * A leader's confidential track record over 90 days, as a normalized index (100 = start). The hero
+ * curve is derived from this, and the headline return is computed from its ends so the number and
+ * the line can never drift apart. Illustrative demo data — not a live feed.
+ */
+const TRACK = [100, 103, 101, 107, 112, 109, 118, 124, 121, 129, 135, 132, 139, 143, 141, 148];
+
 /** Hero visual: a real-looking signal where the strategy is sealed — the product's thesis, shown. */
 function SealedSignalCard() {
   const secretRows = ["Take profit", "Stop loss", "Entry rule"];
+  const ret = Math.round((TRACK[TRACK.length - 1] / TRACK[0] - 1) * 100);
   return (
     <div className="relative rounded-xl border border-border bg-card p-5 shadow-sm">
       <div className="flex items-center gap-3">
@@ -209,6 +218,17 @@ function SealedSignalCard() {
         <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/50 px-2 py-0.5 font-mono text-[11px] text-muted-foreground">
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-success" aria-hidden /> LIVE
         </span>
+      </div>
+
+      {/* Verified performance: visible and animated — the result a follower copies. */}
+      <div className="mt-4">
+        <div className="flex items-baseline justify-between">
+          <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
+            Verified return · 90d
+          </span>
+          <span className="font-mono text-sm font-semibold tabular-nums text-success">+{ret}%</span>
+        </div>
+        <SignalChart values={TRACK} className="mt-2" />
       </div>
 
       <div className="mt-5 flex items-end justify-between">
@@ -230,10 +250,14 @@ function SealedSignalCard() {
           read this
         </div>
         <div className="space-y-2.5">
-          {secretRows.map((label) => (
+          {secretRows.map((label, i) => (
             <div key={label} className="flex items-center justify-between gap-3">
               <span className="text-xs text-muted-foreground">{label}</span>
-              <span className="h-2.5 w-28 rounded-full bg-muted-foreground/20" aria-hidden />
+              <span
+                className="encrypted-bar h-2.5 w-28 overflow-hidden rounded-full bg-muted-foreground/20"
+                style={{ animationDelay: `${i * 500}ms` }}
+                aria-hidden
+              />
             </div>
           ))}
         </div>
