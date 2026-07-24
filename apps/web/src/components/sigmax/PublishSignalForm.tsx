@@ -25,7 +25,15 @@ import { cn } from "@/lib/utils";
 import { useHlMarkets } from "@/hooks/hyperliquid";
 import { displayName, type MarketInfo } from "@/lib/hyperliquid/markets";
 import type { SignalVenueT } from "@sigmax/shared";
-import { Lock, ExternalLink, Check, ChevronsUpDown } from "lucide-react";
+import {
+  ArrowDownRight,
+  ArrowUpRight,
+  Check,
+  ChevronsUpDown,
+  ExternalLink,
+  Lock,
+  ShieldCheck,
+} from "lucide-react";
 
 export interface PublishSignalFormProps {
   tokenOptions: { symbol: string; address: string }[];
@@ -63,6 +71,53 @@ const VENUES: { value: SignalVenueT; label: string }[] = [
   { value: "hyperliquid", label: "Hyperliquid" },
   { value: "arbitrum", label: "Arbitrum" },
 ];
+
+const EXPIRY_PRESETS = [6, 24, 48] as const;
+
+/** Accessible segmented control: radio semantics + visible focus, active option in solid ink. */
+function Segmented<T extends string>({
+  value,
+  onChange,
+  options,
+  label,
+}: {
+  value: T;
+  onChange: (v: T) => void;
+  options: { value: T; label: string; icon?: React.ReactNode }[];
+  label: string;
+}) {
+  return (
+    <div role="radiogroup" aria-label={label} className="inline-flex rounded-md border border-border p-0.5">
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          role="radio"
+          aria-checked={value === o.value}
+          onClick={() => onChange(o.value)}
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-sm px-4 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+            value === o.value
+              ? "bg-foreground text-background"
+              : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          {o.icon}
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Small uppercase rhythm marker separating the form's three concerns. */
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+      {children}
+    </div>
+  );
+}
 
 export function PublishSignalForm({
   tokenOptions,
@@ -112,256 +167,378 @@ export function PublishSignalForm({
     }));
   }
 
+  // Human market label for the preview/summary ("SOL/USDC"), from either venue's raw token fields.
+  const marketLabel = s.token
+    ? s.venue === "hyperliquid"
+      ? `${displayName(s.token)}/${s.quoteToken ? displayName(s.quoteToken) : "?"}`
+      : `${tokenOptions.find((t) => t.address === s.token)?.symbol ?? "?"}/USDC`
+    : "";
+  const limitRuleSet = s.action === "ENTRY" && s.orderType === "LIMIT" && Boolean(s.maxEntryPrice);
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>Publish signal</CardTitle>
         <CardDescription>
-          Spot-only. Encrypted before broadcast — followers can never see your TP/SL.
+          Encrypted before broadcast — followers can never see your TP/SL.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-5">
-        {/* Action */}
-        <div className="space-y-1.5">
-          <Label>Action</Label>
-          <div className="inline-flex rounded-md border border-border p-0.5">
-            {(["ENTRY", "EXIT"] as const).map((a) => (
-              <button
-                key={a}
-                type="button"
-                onClick={() => setS({ ...s, action: a })}
-                className={cn(
-                  "rounded-sm px-4 py-1.5 text-sm font-medium transition-colors",
-                  s.action === a
-                    ? "bg-foreground text-background"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {a}
-              </button>
-            ))}
-          </div>
-        </div>
+      <CardContent>
+        <div className="lg:grid lg:grid-cols-[1fr_264px] lg:gap-8">
+          <div className="space-y-5">
+            <SectionLabel>Trade</SectionLabel>
 
-        {/* Venue — where this swap executes (per-signal). */}
-        <div className="space-y-1.5">
-          <Label>Execute on</Label>
-          <div className="inline-flex rounded-md border border-border p-0.5">
-            {VENUES.map((v) => (
-              <button
-                key={v.value}
-                type="button"
-                // Switching venue clears the market: an Arbitrum address isn't a valid HL pair.
-                onClick={() => setS({ ...s, venue: v.value, token: "", quoteToken: "" })}
-                className={cn(
-                  "rounded-sm px-4 py-1.5 text-sm font-medium transition-colors",
-                  s.venue === v.value
-                    ? "bg-foreground text-background"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {v.label}
-              </button>
-            ))}
-          </div>
-          <p className="text-xs text-muted-foreground">
-            {s.venue === "hyperliquid"
-              ? "Hyperliquid spot — pick from every USDC market."
-              : "Arbitrum — executes in each follower's CopyVault."}
-          </p>
-        </div>
-
-        {/* Market / token */}
-        {s.venue === "hyperliquid" ? (
-          <div className="space-y-1.5">
-            <Label>Market</Label>
-            <HlPairCombobox
-              base={s.token}
-              quote={s.quoteToken}
-              onSelect={(m) => setS({ ...s, token: m.baseToken, quoteToken: m.quoteToken })}
-            />
-            {errors.token && <p className="text-xs text-danger">{errors.token}</p>}
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 gap-3">
+            {/* Action */}
             <div className="space-y-1.5">
-              <Label>Token</Label>
-              <Select value={s.token} onValueChange={(v) => setS({ ...s, token: v })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {tokenOptions.map((t) => (
-                    <SelectItem key={t.address} value={t.address}>
-                      {t.symbol}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {errors.token && <p className="text-xs text-danger">{errors.token}</p>}
-            </div>
-            <div className="space-y-1.5">
-              <Label>Quote</Label>
-              <div className="flex h-9 items-center rounded-md border border-input bg-muted/40 px-3 text-sm text-muted-foreground">
-                USDC
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Size */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <Label>Size</Label>
-            <span className="font-mono text-sm">{s.sizePercent}%</span>
-          </div>
-          <Slider
-            value={[s.sizePercent]}
-            onValueChange={(v) => setS({ ...s, sizePercent: v[0] })}
-            min={1}
-            max={20}
-            step={1}
-          />
-        </div>
-
-        {/* Order type — only relevant for entries */}
-        {s.action === "ENTRY" && (
-          <div className="space-y-1.5">
-            <Label>Order type</Label>
-            <div className="inline-flex rounded-md border border-border p-0.5">
-              {(["MARKET", "LIMIT"] as const).map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => setS({ ...s, orderType: t })}
-                  className={cn(
-                    "rounded-sm px-4 py-1.5 text-sm font-medium transition-colors",
-                    s.orderType === t
-                      ? "bg-foreground text-background"
-                      : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  {t === "MARKET" ? "Market" : "Limit"}
-                </button>
-              ))}
-            </div>
-            {s.orderType === "MARKET" ? (
-              <p className="text-xs text-muted-foreground">
-                Fills immediately at the current price.
-              </p>
-            ) : (
-              <div className="space-y-1.5 pt-1">
-                <Label htmlFor="limit-price">Limit price (USD)</Label>
-                <Input
-                  id="limit-price"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={s.maxEntryPrice}
-                  onChange={(e) => setS({ ...s, maxEntryPrice: e.target.value })}
-                  placeholder="e.g. 70.00"
+              <Label>Action</Label>
+              <div>
+                <Segmented
+                  label="Action"
+                  value={s.action}
+                  onChange={(action) => setS({ ...s, action })}
+                  options={[
+                    {
+                      value: "ENTRY",
+                      label: "ENTRY",
+                      icon: <ArrowUpRight className="h-3.5 w-3.5 text-success" aria-hidden />,
+                    },
+                    {
+                      value: "EXIT",
+                      label: "EXIT",
+                      icon: <ArrowDownRight className="h-3.5 w-3.5 text-danger" aria-hidden />,
+                    },
+                  ]}
                 />
-                {errors.maxEntryPrice && (
-                  <p className="text-xs text-danger">{errors.maxEntryPrice}</p>
+              </div>
+            </div>
+
+            {/* Venue — where this swap executes (per-signal). */}
+            <div className="space-y-1.5">
+              <Label>Execute on</Label>
+              <div>
+                <Segmented
+                  label="Execution venue"
+                  value={s.venue}
+                  // Switching venue clears the market: an Arbitrum address isn't a valid HL pair.
+                  onChange={(venue) => setS({ ...s, venue, token: "", quoteToken: "" })}
+                  options={VENUES}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {s.venue === "hyperliquid"
+                  ? "Hyperliquid spot — pick from every USDC market."
+                  : "Arbitrum — executes in each follower's CopyVault."}
+              </p>
+            </div>
+
+            {/* Market / token */}
+            {s.venue === "hyperliquid" ? (
+              <div className="space-y-1.5">
+                <Label>Market</Label>
+                <HlPairCombobox
+                  base={s.token}
+                  quote={s.quoteToken}
+                  onSelect={(m) => setS({ ...s, token: m.baseToken, quoteToken: m.quoteToken })}
+                />
+                {errors.token && <p className="text-xs text-danger">{errors.token}</p>}
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Token</Label>
+                  <Select value={s.token} onValueChange={(v) => setS({ ...s, token: v })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {tokenOptions.map((t) => (
+                        <SelectItem key={t.address} value={t.address}>
+                          {t.symbol}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {errors.token && <p className="text-xs text-danger">{errors.token}</p>}
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Quote</Label>
+                  <div className="flex h-9 items-center rounded-md border border-input bg-muted/40 px-3 text-sm text-muted-foreground">
+                    USDC
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Size */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Size</Label>
+                <span className="font-mono text-sm tabular-nums">{s.sizePercent}%</span>
+              </div>
+              <Slider
+                value={[s.sizePercent]}
+                onValueChange={(v) => setS({ ...s, sizePercent: v[0] })}
+                min={1}
+                max={20}
+                step={1}
+              />
+              <p className="text-xs text-muted-foreground">
+                {s.sizePercent}% of each follower's vault goes into this trade.
+              </p>
+            </div>
+
+            {/* Order type — only relevant for entries */}
+            {s.action === "ENTRY" && (
+              <div className="space-y-1.5">
+                <Label>Order type</Label>
+                <div>
+                  <Segmented
+                    label="Order type"
+                    value={s.orderType}
+                    onChange={(orderType) => setS({ ...s, orderType })}
+                    options={[
+                      { value: "MARKET", label: "Market" },
+                      { value: "LIMIT", label: "Limit" },
+                    ]}
+                  />
+                </div>
+                {s.orderType === "MARKET" ? (
+                  <p className="text-xs text-muted-foreground">
+                    Fills immediately at the current price.
+                  </p>
+                ) : (
+                  <div className="space-y-1.5 pt-1">
+                    <Label htmlFor="limit-price">Limit price (USD)</Label>
+                    <Input
+                      id="limit-price"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={s.maxEntryPrice}
+                      onChange={(e) => setS({ ...s, maxEntryPrice: e.target.value })}
+                      placeholder="e.g. 70.00"
+                    />
+                    {errors.maxEntryPrice && (
+                      <p className="text-xs text-danger">{errors.maxEntryPrice}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Secret block — the product's core: these fields never leave the browser in plaintext. */}
+            <div className="space-y-3 rounded-lg border border-primary/25 bg-accent/30 p-4">
+              <div className="flex items-center gap-1.5 text-xs font-medium text-accent-foreground">
+                <Lock className="h-3.5 w-3.5 text-primary" aria-hidden />
+                Confidential — encrypted in your browser, never visible to followers
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="tp">Take profit (USD)</Label>
+                  <Input
+                    id="tp"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={s.takeProfitPrice}
+                    onChange={(e) => setS({ ...s, takeProfitPrice: e.target.value })}
+                    placeholder="—"
+                    autoComplete="off"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="sl">Stop loss (USD)</Label>
+                  <Input
+                    id="sl"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={s.stopLossPrice}
+                    onChange={(e) => setS({ ...s, stopLossPrice: e.target.value })}
+                    placeholder="—"
+                    autoComplete="off"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <SectionLabel>Execution</SectionLabel>
+
+            {/* Slippage / expiry */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="slip">Slippage %</Label>
+                <Input
+                  id="slip"
+                  type="number"
+                  min="0.1"
+                  max="5"
+                  step="0.1"
+                  value={s.slippagePercent}
+                  onChange={(e) => setS({ ...s, slippagePercent: Number(e.target.value) })}
+                />
+                {errors.slippagePercent && (
+                  <p className="text-xs text-danger">{errors.slippagePercent}</p>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="exp">Expires in (hours)</Label>
+                <div className="flex items-center gap-1.5">
+                  {EXPIRY_PRESETS.map((h) => (
+                    <button
+                      key={h}
+                      type="button"
+                      onClick={() => setS({ ...s, expiresInHours: h })}
+                      aria-pressed={s.expiresInHours === h}
+                      className={cn(
+                        "rounded-md border px-2 py-1.5 font-mono text-xs tabular-nums transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                        s.expiresInHours === h
+                          ? "border-foreground bg-foreground text-background"
+                          : "border-border text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      {h}h
+                    </button>
+                  ))}
+                  <Input
+                    id="exp"
+                    type="number"
+                    min="1"
+                    className="h-8 flex-1"
+                    value={s.expiresInHours}
+                    onChange={(e) => setS({ ...s, expiresInHours: Number(e.target.value) })}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Pre-broadcast review — on lg the preview rail plays this role. */}
+            <div className="rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground lg:hidden">
+              Broadcasting <span className="font-medium text-foreground">{s.action}</span>
+              {marketLabel && <> · <span className="font-mono">{marketLabel}</span></>} ·{" "}
+              {s.sizePercent}% · expires {s.expiresInHours}h · TP/SL sealed
+            </div>
+
+            <TxButton
+              label="Publish signal"
+              pendingLabel="Encrypting & publishing…"
+              onClick={handle}
+            />
+
+            {lastPublished && (
+              <div className="flex items-center justify-between rounded-md border border-success/30 bg-success/5 px-3 py-2 text-sm">
+                <span className="inline-flex items-center gap-1.5 text-success">
+                  <Check className="h-4 w-4" /> Published
+                  <span className="text-muted-foreground">
+                    · {new Date(lastPublished.at).toLocaleTimeString()}
+                  </span>
+                </span>
+                {lastPublished.proofs.length > 0 && (
+                  <div className="flex items-center gap-3">
+                    {lastPublished.proofs.map((p) => (
+                      <a
+                        key={p.url}
+                        href={p.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        {p.label} <ExternalLink className="h-3 w-3" />
+                      </a>
+                    ))}
+                  </div>
                 )}
               </div>
             )}
           </div>
-        )}
 
-        {/* Secret block */}
-        <div className="space-y-3 rounded-md border border-dashed border-border bg-muted/30 p-3">
-          <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-            <Lock className="h-3 w-3" /> Encrypted — never visible to followers
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="tp">Take profit (USD)</Label>
-              <Input
-                id="tp"
-                type="number"
-                min="0"
-                step="0.01"
-                value={s.takeProfitPrice}
-                onChange={(e) => setS({ ...s, takeProfitPrice: e.target.value })}
-                placeholder="—"
-                autoComplete="off"
+          {/* Live "what followers see" — the confidentiality guarantee, shown at the moment it matters.
+              Mirrors the form state; aria-hidden because every value it shows is already in the form. */}
+          <aside className="hidden lg:block" aria-hidden>
+            <div className="sticky top-20">
+              <FollowerPreview
+                action={s.action}
+                marketLabel={marketLabel}
+                sizePercent={s.sizePercent}
+                tpSet={Boolean(s.takeProfitPrice)}
+                slSet={Boolean(s.stopLossPrice)}
+                limitRuleSet={limitRuleSet}
               />
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="sl">Stop loss (USD)</Label>
-              <Input
-                id="sl"
-                type="number"
-                min="0"
-                step="0.01"
-                value={s.stopLossPrice}
-                onChange={(e) => setS({ ...s, stopLossPrice: e.target.value })}
-                placeholder="—"
-                autoComplete="off"
-              />
-            </div>
-          </div>
+          </aside>
         </div>
-
-        {/* Slippage / expiry */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="slip">Slippage %</Label>
-            <Input
-              id="slip"
-              type="number"
-              min="0.1"
-              max="5"
-              step="0.1"
-              value={s.slippagePercent}
-              onChange={(e) => setS({ ...s, slippagePercent: Number(e.target.value) })}
-            />
-            {errors.slippagePercent && (
-              <p className="text-xs text-danger">{errors.slippagePercent}</p>
-            )}
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="exp">Expires in (hours)</Label>
-            <Input
-              id="exp"
-              type="number"
-              min="1"
-              value={s.expiresInHours}
-              onChange={(e) => setS({ ...s, expiresInHours: Number(e.target.value) })}
-            />
-          </div>
-        </div>
-
-        <TxButton label="Publish signal" pendingLabel="Encrypting & publishing…" onClick={handle} />
-
-        {lastPublished && (
-          <div className="flex items-center justify-between rounded-md border border-success/30 bg-success/5 px-3 py-2 text-sm">
-            <span className="inline-flex items-center gap-1.5 text-success">
-              <Check className="h-4 w-4" /> Published
-              <span className="text-muted-foreground">
-                · {new Date(lastPublished.at).toLocaleTimeString()}
-              </span>
-            </span>
-            {lastPublished.proofs.length > 0 && (
-              <div className="flex items-center gap-3">
-                {lastPublished.proofs.map((p) => (
-                  <a
-                    key={p.url}
-                    href={p.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-                  >
-                    {p.label} <ExternalLink className="h-3 w-3" />
-                  </a>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
       </CardContent>
     </Card>
+  );
+}
+
+/** The follower's view of this signal: outcome fields visible, strategy fields sealed. */
+function FollowerPreview({
+  action,
+  marketLabel,
+  sizePercent,
+  tpSet,
+  slSet,
+  limitRuleSet,
+}: {
+  action: "ENTRY" | "EXIT";
+  marketLabel: string;
+  sizePercent: number;
+  tpSet: boolean;
+  slSet: boolean;
+  limitRuleSet: boolean;
+}) {
+  const rows: { label: string; sealed: boolean }[] = [
+    { label: "Take profit", sealed: tpSet },
+    { label: "Stop loss", sealed: slSet },
+    { label: "Entry rule", sealed: limitRuleSet },
+  ];
+  return (
+    <div>
+      <div className="mb-2 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+        <ShieldCheck className="h-3.5 w-3.5 text-primary" /> What followers see
+      </div>
+      <div className="rounded-xl border border-border bg-muted/20 p-4">
+        <div className="flex items-end justify-between">
+          <div>
+            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Signal</div>
+            <div className="mt-1 font-mono text-base font-semibold">
+              <span className={action === "ENTRY" ? "text-success" : "text-danger"}>
+                {action === "ENTRY" ? "BUY" : "SELL"}
+              </span>{" "}
+              {marketLabel || "—"}
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Size</div>
+            <div className="mt-1 font-mono text-base tabular-nums">{sizePercent}%</div>
+          </div>
+        </div>
+        <div className="mt-4 rounded-lg border border-dashed border-border bg-background/60 p-3">
+          <div className="mb-2.5 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+            <Lock className="h-3 w-3 text-primary" /> Sealed until the enclave opens it
+          </div>
+          <div className="space-y-2">
+            {rows.map((r, i) => (
+              <div key={r.label} className="flex items-center justify-between gap-3">
+                <span className="text-xs text-muted-foreground">{r.label}</span>
+                {r.sealed ? (
+                  <span
+                    className="encrypted-bar h-2 w-20 overflow-hidden rounded-full bg-muted-foreground/20"
+                    style={{ animationDelay: `${i * 500}ms` }}
+                  />
+                ) : (
+                  <span className="text-xs text-muted-foreground/50">—</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+        <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
+          Followers copy the trade in their own vaults. Your thresholds stay encrypted end-to-end.
+        </p>
+      </div>
+    </div>
   );
 }
 

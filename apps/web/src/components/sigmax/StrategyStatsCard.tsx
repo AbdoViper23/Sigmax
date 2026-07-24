@@ -1,4 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface StrategyStatsCardProps {
@@ -9,13 +10,11 @@ export interface StrategyStatsCardProps {
   totalEarnedWip: string;
 }
 
-function Stat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+function Stat({ label, value, className }: { label: string; value: string; className?: string }) {
   return (
     <div>
       <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div className={cn("mt-1 font-mono text-2xl tabular-nums", accent && "text-success")}>
-        {value}
-      </div>
+      <div className={cn("mt-1 font-mono text-2xl tabular-nums", className)}>{value}</div>
     </div>
   );
 }
@@ -26,6 +25,7 @@ export function StrategyStatsCard({
   verifiedReturnPct,
   totalEarnedWip,
 }: StrategyStatsCardProps) {
+  const fresh = subscribers === 0 && signalsPublished === 0;
   return (
     <Card>
       <CardHeader>
@@ -42,16 +42,29 @@ export function StrategyStatsCard({
                 ? "—"
                 : `${verifiedReturnPct >= 0 ? "+" : ""}${verifiedReturnPct.toFixed(1)}%`
             }
-            accent={verifiedReturnPct !== null && verifiedReturnPct >= 0}
+            className={
+              verifiedReturnPct === null
+                ? "text-muted-foreground"
+                : verifiedReturnPct >= 0
+                  ? "text-success"
+                  : "text-danger"
+            }
           />
-          <Stat label="Total earned" value={`${totalEarnedWip} WIP`} accent />
+          <Stat label="Total earned" value={`${totalEarnedWip} WIP`} className="text-success" />
         </div>
-        {/* Revenue is split to the leader's wallet automatically on every subscribe/renew
-            (SubscriptionRegistry.subscribe) — there is nothing to claim. */}
-        <p className="text-xs text-muted-foreground">
-          Subscription revenue is paid to your wallet automatically on every subscribe & renewal —
-          no claim needed.
-        </p>
+        {fresh ? (
+          <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+            <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" aria-hidden />
+            Fresh desk — publish your first signal below to start your on-chain track record.
+          </p>
+        ) : (
+          /* Revenue is split to the leader's wallet automatically on every subscribe/renew
+             (SubscriptionRegistry.subscribe) — there is nothing to claim. */
+          <p className="text-xs text-muted-foreground">
+            Subscription revenue is paid to your wallet automatically on every subscribe & renewal —
+            no claim needed.
+          </p>
+        )}
       </CardContent>
     </Card>
   );
