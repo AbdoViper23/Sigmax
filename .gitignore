@@ -13,7 +13,8 @@ broadcast/
 coverage/
 *.log
 .DS_Store
-lib/
+# Foundry-installed contract deps only — NOT a blanket lib/ (that silently ignored apps/web/src/lib)
+packages/contracts/lib/
 docs/business
 
 # scraped Story docs HTML dump — local reference only, do not upload
