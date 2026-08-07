@@ -72,15 +72,24 @@ inside the follower's non-custodial `CopyVaultFlare`. Hyperliquid spot is a reus
     asserting the strategy, take-profit and stop-loss never reach logs or reported state.
   - **Keeper (10 tests):** relays each vault's authorization, preflights and simulates so doomed
     relays cost no gas, and one entry's revert never blocks the rest.
-- **Coston2 recon confirmed on-chain:** FXRP token + AssetManager resolved; FTSO XRP/USD readable
-  fee-free (live sample ≈ $1.0193); BlazeSwap router + factory deployed (121 pairs); dev wallet funded
-  with 100 C2FLR + 10 FXRP.
+- **Phase 0b passed live on Coston2.** Coston2 has no FXRP/stablecoin liquidity — the canonical FXRP
+  appeared in exactly one pair holding ~4.75 FXRP, mispriced ~7×. So we seeded our own FXRP/testUSD
+  pool at the live FTSO price and executed a real swap against an **FTSO-derived floor computed by the
+  same `computeMinOut` the enclave uses**: 0.05 FXRP → 0.050631 testUSD, floor 0.0506
+  ([tx](https://coston2-explorer.flare.network/tx/0xd6a948f4d5e8d52d173ced8244d6580ff768660056788c2dbae131e8f03ff682)).
+  Both steps are reproducible scripts, not one-off console work.
+  While mapping the venue we also found a **decoy `FTestXRP`** at `0x8b4abA9C…` with healthy-looking
+  pools whose AssetManager is unregistered — wiring to it would look correct and execute nothing real.
 - **Frontend wired to Coston2 (114):** client-side ECIES publishing (no server ever sees a signal),
   the "Flare (FXRP)" venue, and a live FTSO XRP/USD badge showing the feed that bounds `minOut`.
 
 ## Deployment / addresses (Coston2, chain 114)
 - FXRP: `0x0b6A3645c240605887a5532109323A3E12273dc7` · AssetManagerFXRP: `0xc1Ca88b937d0b528842F95d5731ffB586f4fbDFA`
 - FtsoV2: `0xC4e9c78EA53db782E28f28Fdf80BaF59336B304d` · BlazeSwap router: `0x8D29b61C41CF318d15d031BE2928F79630e068e6`
+- **FXRP/testUSD pool (we created it): `0x97835403EfbF27Ba52e613d90D4dD21FD66D7511`** — Coston2 had no
+  FXRP/stablecoin liquidity, so we seeded one at the live FTSO price. testUSD:
+  `0x6623C0BB56aDb150dC9C6BdB8682521354c2BF73`
+- FlareTeeManager (FCC diamond, post-redeploy): `0x1a9C4A0f9D76c0b1D91d22E24E573a9b377618aE`
 - Control plane (TeeSigVerifier / CopyVaultFlareFactory / SignalRegistry / SubscriptionRegistry): `⟨deploy pending⟩`
 - FCC extension id / TEE address: `⟨from the Phase 0a round-trip⟩`
 
