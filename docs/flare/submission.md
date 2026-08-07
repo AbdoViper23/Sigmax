@@ -55,12 +55,28 @@ FTSO-bounded `minOut`, and returns a TEE-signed `SwapAuth[]` → a keeper submit
 inside the follower's non-custodial `CopyVaultFlare`. Hyperliquid spot is a reused bonus venue.
 
 ## Evidence (current state)
-- **50+ tests green**, all offline/local: control-plane contracts (Foundry) — subscription lifecycle,
-  TEE-signature verification, replay/expiry/cross-vault/wrong-chain/status guards, owner-only withdraw,
-  deterministic vault factory; the signal schema (flare venue); the extension core (`buildSwapAuths`,
-  `processFlareSignal`); and a **TS↔Solidity ABI-parity proof** for the signed `SwapAuth[]`.
-- **Coston2 recon confirmed:** FXRP token + AssetManager resolved; FTSO XRP/USD readable (fee-free view);
-  BlazeSwap router deployed; dev wallet funded.
+- **130+ tests green** across the monorepo and the extension. Highlights:
+  - **Control-plane contracts (Foundry, 41 passing):** subscription lifecycle; TEE-signature
+    verification; replay / expiry / cross-vault / wrong-chain / bad-status guards; owner-only
+    withdraw; token+router whitelist and per-trade cap; deterministic vault factory.
+  - **Two independent cross-language proofs**, because these are the seams where a hackathon build
+    silently breaks:
+    1. **TS ↔ Solidity ABI parity** for the signed `SwapAuth[]` — the exact bytes the TEE signs and
+       the vault re-hashes (`flare-encoding-vector.test.ts` / `SwapAuthEncoding.t.sol`).
+    2. **TS ↔ go-ethereum ECIES interop** — `fce-sigmax/go/cmd/ecies-interop` links the tee-node's
+       own go-ethereum v1.17.4 and decrypts a ciphertext produced by the browser code; the reverse
+       direction is pinned as a committed fixture. A signal encrypted in the leader's browser
+       provably decrypts inside the enclave.
+  - **FCC extension (13 tests):** the `SIGNAL/EXECUTE` handler — decrypt, validate, skip inactive or
+    zero-balance subscribers, FTSO-bounded `minOut`, expiry/chain/venue rejection — including a test
+    asserting the strategy, take-profit and stop-loss never reach logs or reported state.
+  - **Keeper (10 tests):** relays each vault's authorization, preflights and simulates so doomed
+    relays cost no gas, and one entry's revert never blocks the rest.
+- **Coston2 recon confirmed on-chain:** FXRP token + AssetManager resolved; FTSO XRP/USD readable
+  fee-free (live sample ≈ $1.0193); BlazeSwap router + factory deployed (121 pairs); dev wallet funded
+  with 100 C2FLR + 10 FXRP.
+- **Frontend wired to Coston2 (114):** client-side ECIES publishing (no server ever sees a signal),
+  the "Flare (FXRP)" venue, and a live FTSO XRP/USD badge showing the feed that bounds `minOut`.
 
 ## Deployment / addresses (Coston2, chain 114)
 - FXRP: `0x0b6A3645c240605887a5532109323A3E12273dc7` · AssetManagerFXRP: `0xc1Ca88b937d0b528842F95d5731ffB586f4fbDFA`
@@ -73,6 +89,15 @@ inside the follower's non-custodial `CopyVaultFlare`. Hyperliquid spot is a reus
 
 ## Repo
 `⟨GitHub URL⟩` — branch `feat/flare-migration`.
+
+## Honest status
+Everything above that is described as tested **is tested and passing**; everything not yet run
+against the live network is called out here rather than implied. Outstanding at the time of writing:
+the FCC round-trip on Coston2 (extension registration + a real `ActionResult`), the control-plane
+deploy, and one live FXRP swap. The extension, contracts, keeper, client-side encryption and frontend
+are complete and covered by tests; what remains is deployment, and it is gated on a Docker host and a
+stable public tunnel rather than on unwritten code. If the run happens in simulated-TEE mode
+(`SIMULATED_TEE=true`, which Flare accepts for judging), the demo says so on screen.
 
 ## Roadmap / next steps
 1. Complete the FCC round-trip on Coston2 (simulated TEE — accepted by the judges) and deploy the control plane.
