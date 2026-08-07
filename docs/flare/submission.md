@@ -32,7 +32,8 @@ without exposing how they trade.
 - **On-chain TEE-signature verification.** Each `CopyVaultFlare` verifies that a swap was authorized by
   the registered TEE identity (`ecrecover` over the FCC `ActionResult`) before moving any funds —
   verifiable confidential execution.
-- **FAssets / FXRP.** FXRP is the traded asset (FXRP↔USDT0 swaps) and the subscription asset.
+- **FAssets / FXRP.** FXRP is the traded asset and the subscription asset. Coston2 had no FXRP
+  liquidity, so we seeded the FXRP/testUSD pool the vaults trade against.
 - **FTSO.** XRP/USD block-latency feed sets the on-chain `minOut` slippage bound for every swap.
 - **Control plane on Coston2.** `SubscriptionRegistry` (subscriptions + fee split), `SignalRegistry`
   (commit-before-outcome ledger), `CopyVaultFlare(+Factory)` (non-custodial per-follower vaults).
@@ -43,15 +44,17 @@ without exposing how they trade.
 | Signal schema + ABI encode/decode | **FCC extension** (decrypt + execute in a TEE) ⭐ B2 | SubscriptionRegistry → Coston2 |
 | Position-sizing logic | **On-chain TEE-signature verification** (`TeeSigVerifier`, `executeSwapWithTeeSig`) ⭐ B2 | CopyVault → `CopyVaultFlare` (sig-gated, no executor role) |
 | Hyperliquid executor (bonus venue) | **`SignalRegistry`** commit-before-outcome ledger | Confidentiality: Story CDR → ECIES-to-enclave (go-eth) |
-| Vite/React web app shell | **SparkDEX/BlazeSwap FXRP swap + FTSO min-out** ⭐ B1 | `strategyId`/plan model → Coston2 |
+| Vite/React web app shell | **BlazeSwap FXRP swap + FTSO min-out (incl. seeding the pool)** ⭐ B1 | `strategyId`/plan model → Coston2 |
 | Non-custodial vault pattern | **`buildSwapAuths` / `processFlareSignal`** (per-follower `SwapAuth[]`) | — |
+| — | **Client-side ECIES encryption** (browser → enclave; the Story build encrypted server-side) ⭐ B2 | — |
+| — | **Trustless keeper** relaying TEE-signed authorizations | — |
 
 ## Architecture (one paragraph)
 Leader's browser encrypts the signal to the enclave's public key (client-side ECIES) → publishes the
 ciphertext on Coston2 (`SignalRegistry` commit + an FCC instruction) → the FCC extension decrypts inside
 the TEE, reads active subscribers from `SubscriptionRegistry`, sizes each follower, computes an
 FTSO-bounded `minOut`, and returns a TEE-signed `SwapAuth[]` → a keeper submits each vault's
-`executeSwapWithTeeSig`, which verifies the TEE signature and executes an FXRP↔USDT0 swap on BlazeSwap
+`executeSwapWithTeeSig`, which verifies the TEE signature and executes an FXRP↔testUSD swap on BlazeSwap
 inside the follower's non-custodial `CopyVaultFlare`. Hyperliquid spot is a reused bonus venue.
 
 ## Evidence (current state)
@@ -103,7 +106,8 @@ inside the follower's non-custodial `CopyVaultFlare`. Hyperliquid spot is a reus
 Everything above that is described as tested **is tested and passing**; everything not yet run
 against the live network is called out here rather than implied. Outstanding at the time of writing:
 the FCC round-trip on Coston2 (extension registration + a real `ActionResult`), the control-plane
-deploy, and one live FXRP swap. The extension, contracts, keeper, client-side encryption and frontend
+deploy, and the end-to-end run through a vault. The venue itself is already proven live (Phase 0b
+above). The extension, contracts, keeper, client-side encryption and frontend
 are complete and covered by tests; what remains is deployment, and it is gated on a Docker host and a
 stable public tunnel rather than on unwritten code. If the run happens in simulated-TEE mode
 (`SIMULATED_TEE=true`, which Flare accepts for judging), the demo says so on screen.
