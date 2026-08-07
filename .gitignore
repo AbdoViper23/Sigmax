@@ -19,4 +19,20 @@ docs/business
 
 # scraped Story docs HTML dump — local reference only, do not upload
 docs/story-docs.md
-/fce-sigmax/
+# fce-sigmax — our FCC extension, adapted from flare-foundation/fce-sign. Tracked (it IS the new
+# work), minus secrets and build output. The upstream clone's git dir lives in
+# .fce-sigmax-upstream.git so we can still rebase onto upstream; see docs/flare/reference/fcc-extension.md
+/.fce-sigmax-upstream.git/
+fce-sigmax/.env
+fce-sigmax/.env.*
+!fce-sigmax/.env.example
+fce-sigmax/config/extension.env
+fce-sigmax/config/deploy.log
+fce-sigmax/config/proxy/*.docker.toml
+!fce-sigmax/config/proxy/*.docker.toml.example
+fce-sigmax/node_modules/
+fce-sigmax/typescript/node_modules/
+fce-sigmax/typescript/dist/
+fce-sigmax/out/
+fce-sigmax/cache/
+fce-sigmax/broadcast/
