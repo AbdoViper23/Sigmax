@@ -1,11 +1,40 @@
-# Sigmax — Confidential Copy-Trading on Story Protocol
+# Sigmax — Confidential Copy-Trading
 
 > **Leaders publish encrypted trading signals. Followers copy them automatically.**
 > The strategy never leaks — but the leader's track record stays verifiable on-chain.
 
-Sigmax is a confidential copy-trading platform built on **Story Protocol's Confidential Data Rails (CDR)**. A trader (the *leader*) encrypts every trading signal into a vault on Story L1. Followers subscribe with a monthly payment. An off-chain **agent running inside a TEE** is the only thing that can decrypt a signal — and only to place the trade on each follower's behalf, on whichever venue has the deepest liquidity. Followers copy the *result*, never the strategy, and the agent can never touch their funds.
+A trader (the *leader*) encrypts every trading signal. Followers subscribe with a monthly payment. Code running inside a **TEE** is the only thing that can decrypt a signal — and only to place the trade on each follower's behalf, inside that follower's own non-custodial vault. Followers copy the *result*, never the strategy, and nothing in the system can touch their funds.
 
-Built for the **CDR Hackathon** (build.usecdr.dev, presented by Story).
+## Two builds, one product
+
+Sigmax exists in two implementations of the same idea. **The Flare build is the current one.**
+
+| | **Flare build (current)** | Story build (original) |
+|---|---|---|
+| Branch | `feat/flare-migration` | `main` |
+| Confidentiality | ECIES encrypt-to-enclave, **client-side** | Story CDR threshold encryption (server-side) |
+| Confidential compute | **Flare Confidential Compute (FCC)** extension | off-chain TEE agent |
+| Execution | FXRP swaps on Coston2, FTSO-bounded `minOut` | Arbitrum / Hyperliquid |
+| Trust gate | **On-chain `ecrecover` of the TEE's `ActionResult`** before any swap | executor role on the vault |
+| Chains | Coston2 only (114) | Story Aeneid + Arbitrum |
+| Built for | Flare Summer Signal hackathon | CDR Hackathon (build.usecdr.dev, presented by Story) |
+
+**Reading the Flare build:** start at [`docs/flare/submission.md`](docs/flare/submission.md) for what it
+is and what's proven, [`docs/superpowers/specs/2026-07-23-sigmax-on-flare-design.md`](docs/superpowers/specs/2026-07-23-sigmax-on-flare-design.md)
+for the design, and [`docs/flare/reference/fcc-extension.md`](docs/flare/reference/fcc-extension.md)
+for the TEE extension in [`fce-sigmax/`](fce-sigmax/).
+
+Two things worth knowing about the Flare build, because they are the seams where this kind of system
+usually breaks quietly, and both are covered by tests rather than assumed:
+
+- The signal is encrypted **in the leader's browser**, so no server — including ours — ever sees a
+  strategy. That the browser's ECIES really is decryptable by the enclave is proven against the
+  TEE node's own go-ethereum, not assumed ([`packages/cdr/test/geth-interop.test.ts`](packages/cdr/test/geth-interop.test.ts)).
+- A swap moves funds only if `ecrecover` over the TEE's signed result matches the registered TEE
+  address, so the executing party is trustless — a tampered authorization simply reverts.
+
+The rest of this README describes the **original Story build**, which remains accurate for that
+branch and is kept for history.
 
 ---
 
@@ -403,41 +432,55 @@ docs/                   # Design docs (architecture, agent, contracts, business)
 
 ---
 
-## Deployed addresses
+## Running Locally
 
-**Story Aeneid (chain 1315)** — RPC `https://aeneid.storyrpc.io` · explorer `https://aeneid.storyscan.io`
+```bash
+# Install dependencies
+pnpm install
 
-| Contract | Address |
+# Contracts (Foundry)
+forge build
+forge test -vvv
+
+# Agent
+pnpm --filter agent dev
+
+# Frontend
+pnpm --filter web dev
+
+# Full monorepo build
+pnpm -r build
+```
+
+> **Note:** Swap execution is demoed against a **forked Arbitrum** (`anvil --fork-url`). Aeneid testnet has no real spot liquidity.
+
+---
+
+## The End-to-End Demo
+
+1. Leader publishes a signal (UI) → encrypted vault appears on Story (ciphertext only).
+2. Agent logs: `detected → decrypted (TEE) → follower active → swap executed` (tx on forked Arbitrum).
+3. Follower dashboard: open position appears — trade result shown, strategy never shown.
+4. Price hits TP → agent exits → PnL visible.
+5. Leaderboard: verifiable record (signal committed before outcome + on-chain trades).
+6. Click "Revoke Agent" → agent can no longer trade on that vault.
+
+---
+
+## Why CDR + Story Is the Right Stack
+
+| Need | Story / CDR primitive |
 |---|---|
-| IP Asset Registry | `0x77319B4031e6eF1250907aa00018B8B1c67a244b` |
-| Licensing Module | `0x04fbd8a2e56dd85CFD5500A4A4DfA955B9f1dE6f` |
-| Owner-Write Condition | `0x4C9bFC96d7092b590D497A191826C3dA2277c34B` |
-| License-Read Condition | `0xC0640AD4CF2CaA9914C8e5C44234359a9102f7a3` |
-| License Token (ERC-721) | `0xFe3838BFb30B34170F00030B52eA4893d8aAC6bC` |
+| Keep the strategy secret | CDR threshold encryption + ReadCondition |
+| Prove the track record | On-chain signal commits (CDR vault timestamps) + swap events |
+| Sell the strategy as IP | Story IP Asset + PIL license terms |
+| Monthly subscriptions | License Token mint (ERC-721) + SubscriptionRegistry |
+| Revenue split without code | IP Royalty Vault (100 Royalty Tokens, permissionless claim) |
+| Compliance / access control | WriteCondition (leader-only publish) + ReadCondition (subscriber-only decrypt) |
+
+Every component of the business model maps to a Story primitive. No custom payment contracts needed.
 
 ---
 
-## Security model
 
-- **Non-custodial.** Funds always stay in the follower's own account/vault. On Hyperliquid the agent is an `approveAgent` key that can trade but not withdraw; on EVM it holds an executor role on the follower's `CopyVault` and only the owner can withdraw.
-- **Confidential by construction.** The strategy is threshold-encrypted; only the TEE agent decrypts it, and only to trade. Nothing secret is logged, persisted, or exposed to the frontend.
-- **Bounded execution.** Position size is capped to a bounded share of each follower's balance, with per-trade caps and on-chain min-out / slippage protection.
-
----
-
-## Roadmap
-
-**Trust & validation (next, with a dedicated AI team)**
-- **Decentralized signal-validation model.** Today, trust sits entirely on the leader. The next major step is an independent model that validates *every* signal **before** it's copied — checking the token's TVL and on-chain activity, the project's legitimacy, a risk/panic score, and market sentiment. The goal is to turn each call from *"trust the leader"* into an **independently verified** trade, and to neutralize the worst case of a leader pumping an illiquid token and dumping it on followers.
-
-**More venues & better execution**
-- **DeepBook on Sui** as an additional execution venue.
-- **Native exchange-level TP/SL** orders (replacing the polling exit loop where supported).
-- **Batched / atomic fan-out** (e.g. CoW-style settlement) to further harden against front-running.
-- **Base** as a second EVM liquidity chain.
-
-**Hardening & onboarding**
-- Deploy the agent to a production **TEE** (e.g. Phala TDX) with attestation.
-- **Session-key onboarding** (EIP-7702 / ERC-4337) for smoother follower setup.
-- Contract **audit** and mainnet launch.
-- **Auto-renewal** and additional subscription read conditions.
+*Sigmax · built for the CDR Hackathon · Story Protocol · 2026*
