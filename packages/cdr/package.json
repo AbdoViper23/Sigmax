@@ -15,8 +15,11 @@
     "poc": "tsx scripts/poc-cdr.ts"
   },
   "dependencies": {
-    "@sigmax/shared": "workspace:*",
+    "@noble/ciphers": "^1.3.0",
+    "@noble/curves": "^1.9.7",
+    "@noble/hashes": "^1.8.0",
     "@piplabs/cdr-sdk": "^0.2.1",
+    "@sigmax/shared": "workspace:*",
     "viem": "^2.21.54",
     "zod": "^3.24.1"
   },
