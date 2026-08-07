@@ -42,6 +42,7 @@
     "@radix-ui/react-toggle-group": "^1.1.11",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@rainbow-me/rainbowkit": "^2.2.11",
+    "@sigmax/cdr": "workspace:*",
     "@sigmax/shared": "workspace:*",
     "@story-protocol/core-sdk": "^1.4.4",
     "@tailwindcss/vite": "^4.2.1",

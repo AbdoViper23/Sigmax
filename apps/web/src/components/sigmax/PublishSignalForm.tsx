@@ -36,7 +36,10 @@ import {
 } from "lucide-react";
 
 export interface PublishSignalFormProps {
+  /** Tokens selectable for the on-chain venues; must be a subset of what the vault whitelists. */
   tokenOptions: { symbol: string; address: string }[];
+  /** Symbol of the Flare quote leg (the Coston2 stablecoin); shown in the Quote box and market label. */
+  flareQuoteSymbol?: string;
   publishing: boolean;
   lastPublished?: { signalId: string; at: string; proofs: { label: string; url: string }[] };
   onPublish: (v: {
@@ -55,7 +58,7 @@ export interface PublishSignalFormProps {
 
 const initialState = {
   action: "ENTRY" as "ENTRY" | "EXIT",
-  venue: "hyperliquid" as SignalVenueT,
+  venue: "flare" as SignalVenueT,
   orderType: "MARKET" as "MARKET" | "LIMIT",
   token: "", // arbitrum: address; hyperliquid: raw base token name (e.g. "USOL")
   quoteToken: "", // hyperliquid: raw quote token name (e.g. "USDC"); arbitrum: defaults to USDC
@@ -68,9 +71,16 @@ const initialState = {
 };
 
 const VENUES: { value: SignalVenueT; label: string }[] = [
+  { value: "flare", label: "Flare (FXRP)" },
   { value: "hyperliquid", label: "Hyperliquid" },
   { value: "arbitrum", label: "Arbitrum" },
 ];
+
+const VENUE_HINTS: Record<SignalVenueT, string> = {
+  flare: "Flare Coston2 — decrypted inside the TEE, swapped in each follower's CopyVault with an FTSO-bounded floor.",
+  hyperliquid: "Hyperliquid spot — pick from every USDC market.",
+  arbitrum: "Arbitrum — executes in each follower's CopyVault.",
+};
 
 const EXPIRY_PRESETS = [6, 24, 48] as const;
 
@@ -121,6 +131,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 export function PublishSignalForm({
   tokenOptions,
+  flareQuoteSymbol = "USDT0",
   lastPublished,
   onPublish,
 }: PublishSignalFormProps) {
@@ -167,11 +178,15 @@ export function PublishSignalForm({
     }));
   }
 
+  // The on-chain quote leg differs per venue: FXRP trades against the Coston2 stablecoin, Arbitrum
+  // against USDC. Hyperliquid carries its own quote in the selected market.
+  const quoteSymbol = s.venue === "flare" ? flareQuoteSymbol : "USDC";
+
   // Human market label for the preview/summary ("SOL/USDC"), from either venue's raw token fields.
   const marketLabel = s.token
     ? s.venue === "hyperliquid"
       ? `${displayName(s.token)}/${s.quoteToken ? displayName(s.quoteToken) : "?"}`
-      : `${tokenOptions.find((t) => t.address === s.token)?.symbol ?? "?"}/USDC`
+      : `${tokenOptions.find((t) => t.address === s.token)?.symbol ?? "?"}/${quoteSymbol}`
     : "";
   const limitRuleSet = s.action === "ENTRY" && s.orderType === "LIMIT" && Boolean(s.maxEntryPrice);
 
@@ -224,11 +239,7 @@ export function PublishSignalForm({
                   options={VENUES}
                 />
               </div>
-              <p className="text-xs text-muted-foreground">
-                {s.venue === "hyperliquid"
-                  ? "Hyperliquid spot — pick from every USDC market."
-                  : "Arbitrum — executes in each follower's CopyVault."}
-              </p>
+              <p className="text-xs text-muted-foreground">{VENUE_HINTS[s.venue]}</p>
             </div>
 
             {/* Market / token */}
@@ -263,7 +274,7 @@ export function PublishSignalForm({
                 <div className="space-y-1.5">
                   <Label>Quote</Label>
                   <div className="flex h-9 items-center rounded-md border border-input bg-muted/40 px-3 text-sm text-muted-foreground">
-                    USDC
+                    {quoteSymbol}
                   </div>
                 </div>
               </div>

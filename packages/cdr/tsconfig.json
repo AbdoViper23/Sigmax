@@ -2,7 +2,10 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "./dist",
-    "rootDir": "./src"
+    "rootDir": "./src",
+    // FlareEnclaveCdr runs in the leader's browser (client-side encryption), so this package needs
+    // the web platform globals — `crypto.getRandomValues` and `fetch`. Both also exist in Node 18+.
+    "lib": ["ES2022", "DOM"]
   },
   "include": ["src/**/*"]
 }

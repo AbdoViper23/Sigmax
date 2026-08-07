@@ -107,6 +107,9 @@ importers:
       '@rainbow-me/rainbowkit':
         specifier: ^2.2.11
         version: 2.2.11(@tanstack/react-query@5.100.14(react@19.2.6))(@types/react@19.2.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(typescript@5.8.3)(viem@2.51.3(bufferutil@4.1.0)(typescript@5.8.3)(utf-8-validate@5.0.10)(zod@3.24.2))(wagmi@2.19.5(@tanstack/query-core@5.100.14)(@tanstack/react-query@5.100.14(react@19.2.6))(@types/react@19.2.15)(bufferutil@4.1.0)(db0@0.3.4)(react@19.2.6)(typescript@5.8.3)(utf-8-validate@5.0.10)(viem@2.51.3(bufferutil@4.1.0)(typescript@5.8.3)(utf-8-validate@5.0.10)(zod@3.24.2))(zod@3.24.2))
+      '@sigmax/cdr':
+        specifier: workspace:*
+        version: link:../../packages/cdr
       '@sigmax/shared':
         specifier: workspace:*
         version: link:../../packages/shared

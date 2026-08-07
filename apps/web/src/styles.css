@@ -64,6 +64,7 @@
   --color-danger: var(--danger);
   --color-chain-story: var(--chain-story);
   --color-chain-arbitrum: var(--chain-arbitrum);
+  --color-chain-flare: var(--chain-flare);
   --color-chain-hyperliquid: var(--chain-hyperliquid);
   --font-mono: ui-monospace, "JetBrains Mono", "SFMono-Regular", Menlo, monospace;
 }
@@ -97,6 +98,8 @@
   --danger: oklch(0.6 0.21 27);
   --chain-story: oklch(0.6 0.18 290);
   --chain-arbitrum: oklch(0.62 0.14 235);
+  /* Flare brand coral — distinct from the violet/blue of the other two chains. */
+  --chain-flare: oklch(0.65 0.19 25);
   --chain-hyperliquid: oklch(0.68 0.13 175);
 
   --chart-1: oklch(0.55 0.13 165);
