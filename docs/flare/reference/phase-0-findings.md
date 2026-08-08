@@ -138,6 +138,44 @@ Two more corrections the live run forced:
 Pinned by `packages/contracts/test/TeeSigVerifierFixture.t.sol` against the real captured signature,
 so a regression fails the suite rather than the demo.
 
+### Operating a simulated TEE: restarting it costs you the machine
+
+The single most expensive lesson of the live run. **A simulated TEE mints a fresh keypair every time
+the container starts.** Its identity is therefore not stable across restarts, and three things break
+at once:
+
+1. The machine address registered on-chain now points at a key nobody holds.
+2. Old registrations are **not** cleaned up — they stay at status 2 (PRODUCTION) forever. After three
+   restarts the extension had three "live" machines, two of them dead.
+3. `TeeExtensionRegistry.getRandomTeeIds()` routes each instruction to **one** of them, so a share of
+   instructions vanish into a dead machine and are never answered.
+
+Worse, the selection set **lags behind registration**. Immediately after registering `0x30Fe2d7A…`,
+`getRandomTeeIds` still returned the previous identity `0xB4Bda94B…` on every call — so a freshly
+registered machine is not routable yet, while the one the registry *will* pick is the one the restart
+just killed. That is the failure mode behind "publishSignal succeeds but no ActionResult ever
+arrives", and no amount of retrying fixes it until the selection set advances.
+
+**Rules that follow:**
+
+- **Do not restart the stack after `post-build.sh`.** Bring it up, register once, then leave it alone
+  for the whole demo. If you must restart, re-run `post-build.sh` and expect a wait before the new
+  identity becomes routable.
+- Anything holding `teeAddress` must be updatable. `CopyVaultFlare.setTeeAddress` (owner-only) covers
+  the vaults; note `CopyVaultFlareFactory.teeAddress` is **immutable**, so a new identity means
+  redeploying the factory for *new* vaults. Existing vaults just need `setTeeAddress`.
+- The durable fix, for production and for a smoother demo, is to fan out: have the sender call
+  `getRandomTeeIds(extensionId, n)` with `n` > 1 so every registered machine receives the
+  instruction and the live one answers. Redundancy is the point of the API.
+
+### Two more live-only findings
+
+- **The public Coston2 RPC caps `eth_getLogs` at 30 blocks.** A wider range fails with "requested too
+  many blocks", which surfaced as the TEE rejecting an otherwise perfectly decrypted signal. The
+  handler now scans in windows (`SIGMAX_LOG_WINDOW`, batched).
+- **`TeeExtensionRegistry` charges a per-instruction fee.** Publishing with `value: 0` reverts with an
+  undecodable selector. Forward fce-sign's `DefaultFee` (`1_000_000_000_000` wei).
+
 ## Pending
 - One real attested run on GCP Confidential Space (`MODE=0`, real measured code hash) — Phase 3.5.
   Until then the demo labels simulated mode honestly, as the spec requires.

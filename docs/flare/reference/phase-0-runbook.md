@@ -75,6 +75,12 @@ ngrok http --domain=<your-reserved>.ngrok-free.dev 6674
 Put that URL in `EXT_PROXY_URL` in `.env.local.coston2`, then re-run `use-chain.sh`. If the URL ever
 changes, update it and re-run `post-build.sh` — the on-chain record must match what you serve.
 
+> ⛔ **Never restart the stack after `post-build.sh`.** A simulated TEE generates a new keypair on
+> every start, so a restart silently invalidates the machine you just registered — while the dead
+> registration stays PRODUCTION and keeps receiving instructions that nobody can answer. Bring the
+> stack up, register once, and leave it running for the whole session. See "Operating a simulated
+> TEE" in `phase-0-findings.md`.
+
 ### Things that bit us on the real run (2026-08-08)
 
 - **`proxy.golang.org` intermittently 403s the large `go-ethereum` / kzg zips** on this network. The
