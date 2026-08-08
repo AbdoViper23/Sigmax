@@ -28,7 +28,17 @@ RUN git clone --depth 1 --branch ${TEE_NODE_VERSION} https://github.com/flare-fo
 
 WORKDIR /build/tee-node
 
-RUN go mod download
+# proxy.golang.org intermittently 403s the large go-ethereum/kzg zips on some networks — the same
+# build succeeds on a retry. Retry rather than fail the whole image on a transient CDN error, and
+# fall through to direct (GitHub) fetches on the last attempts. This changes only *how* modules are
+# fetched, not which ones: go.sum still pins them, so the build stays reproducible.
+RUN for i in 1 2 3 4 5 6; do \
+        if [ "$i" -le 4 ]; then export GOPROXY=https://proxy.golang.org,direct; else export GOPROXY=direct; fi; \
+        echo "go mod download attempt $i (GOPROXY=$GOPROXY)"; \
+        go mod download && break; \
+        [ "$i" = 6 ] && exit 1; \
+        sleep 10; \
+    done
 RUN go mod verify
 
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GOFLAGS="-buildvcs=false" \

@@ -75,6 +75,21 @@ ngrok http --domain=<your-reserved>.ngrok-free.dev 6674
 Put that URL in `EXT_PROXY_URL` in `.env.local.coston2`, then re-run `use-chain.sh`. If the URL ever
 changes, update it and re-run `post-build.sh` — the on-chain record must match what you serve.
 
+### Things that bit us on the real run (2026-08-08)
+
+- **`proxy.golang.org` intermittently 403s the large `go-ethereum` / kzg zips** on this network. The
+  identical build succeeds on a retry, so it is a transient CDN/edge refusal, not a broken pin. The
+  `typescript/Dockerfile` now retries `go mod download` six times and falls back to `GOPROXY=direct`;
+  `go.sum` still pins every module, so reproducibility is unaffected. For **tee-proxy** the same
+  failure was unrecoverable in-image, so `scripts/build-proxy-binary.sh` builds that binary on the
+  host (where the module cache already holds those modules) and the Dockerfile `COPY`s it.
+- **Go base images were too old** for the bumped pins: `proxy/Dockerfile` needed `golang:1.25.12`
+  (tee-proxy v0.0.21 requires ≥ 1.25.8).
+- **Docker group membership** doesn't apply to a shell opened before `usermod`. Either restart WSL
+  (`wsl --shutdown`) or prefix commands with `sg docker -c "…"`, which works immediately.
+- The first `extension-tee` build downloads the whole geth dependency tree — **expect 10–20 minutes**.
+  Subsequent builds hit the layer cache and take seconds.
+
 ## 6. Deploy + start + test [YOU]
 ```bash
 ./scripts/pre-build.sh          # mints EXTENSION_ID, deploys InstructionSender
