@@ -71,12 +71,17 @@ contract CopyVaultFlareTest is Test {
 
     function _signKey(uint256 key, CopyVaultFlare.SwapAuth[] memory auths, bytes32 actionId, string memory tag, uint8 status)
         internal
-        pure
+        view
         returns (bytes memory sig)
     {
+        // Mirrors what the tee-node actually does — see TeeSigVerifier's docs and the real-signature
+        // fixture in TeeSigVerifierFixture.t.sol. The Payload layer (prefix + chainId) is not optional:
+        // omitting it here would let these tests pass against a verifier that rejects every real
+        // signature, which is exactly the bug the fixture test caught.
         bytes memory resultData = abi.encode(auths);
-        bytes32 resultHash = keccak256(abi.encodePacked(keccak256(resultData), actionId, keccak256(bytes(tag)), status));
-        bytes32 ethSigned = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", resultHash));
+        bytes32 inner = keccak256(abi.encodePacked(keccak256(resultData), actionId, keccak256(bytes(tag)), status));
+        bytes32 signed = keccak256(abi.encode(bytes32("TEE_ACTION_RESULT"), block.chainid, inner));
+        bytes32 ethSigned = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", signed));
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(key, ethSigned);
         sig = abi.encodePacked(r, s, v);
     }

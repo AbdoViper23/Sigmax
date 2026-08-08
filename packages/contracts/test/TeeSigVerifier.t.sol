@@ -25,9 +25,9 @@ contract TeeSigVerifierTest is Test {
         string memory tag = "sigmax";
         uint8 status = 1;
 
-        bytes32 resultHash =
-            keccak256(abi.encodePacked(keccak256(resultData), actionId, keccak256(bytes(tag)), status));
-        bytes32 ethSigned = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", resultHash));
+        bytes32 inner = keccak256(abi.encodePacked(keccak256(resultData), actionId, keccak256(bytes(tag)), status));
+        bytes32 signed = keccak256(abi.encode(bytes32("TEE_ACTION_RESULT"), block.chainid, inner));
+        bytes32 ethSigned = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", signed));
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(pk, ethSigned);
 
         address recovered =
