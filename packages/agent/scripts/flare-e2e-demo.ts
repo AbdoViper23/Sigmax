@@ -208,18 +208,33 @@ async function main() {
   }
   console.log("  ✓ take-profit and stop-loss are not recoverable from the published bytes");
 
-  const publishReceipt = await send(
-    "publishSignal",
-    await walletClient.writeContract({
-      address: sender,
-      abi: SENDER_ABI,
-      functionName: "publishSignal",
-      args: [strategyId, "", ciphertext],
-      // TeeExtensionRegistry charges a per-instruction fee, forwarded through publishSignal.
-      // Matches fce-sign's DefaultFee (go/tools/pkg/utils/instructions.go); override with FEE_WEI.
-      value: INSTRUCTION_FEE_WEI,
-    }),
-  );
+  // The registry routes each instruction to a RANDOM machine registered for the extension. A
+  // simulated TEE mints a fresh identity on every restart, so old registrations linger in
+  // PRODUCTION pointing at keys nobody holds — and an instruction routed to one is never answered.
+  // Republish until we're routed to the live machine. (Set LIVE_TEE_ID to enable; without it we
+  // just take whatever routing we get.)
+  // Each restart leaves another dead registration behind, so the odds decay; 20 attempts keeps the
+  // demo reliable even with several stale machines. The production fix is for the sender to request
+  // getRandomTeeIds(extensionId, n) and fan the instruction out to every machine.
+  const liveTee = process.env.LIVE_TEE_ID?.toLowerCase().replace(/^0x/, "");
+  let publishReceipt: Awaited<ReturnType<typeof publicClient.waitForTransactionReceipt>> | undefined;
+  for (let attempt = 1; attempt <= 20; attempt++) {
+    publishReceipt = await send(
+      `publishSignal (attempt ${attempt})`,
+      await walletClient.writeContract({
+        address: sender,
+        abi: SENDER_ABI,
+        functionName: "publishSignal",
+        args: [strategyId, "", ciphertext],
+        // TeeExtensionRegistry charges a per-instruction fee, forwarded through publishSignal.
+        // Matches fce-sign's DefaultFee (go/tools/pkg/utils/instructions.go); override with FEE_WEI.
+        value: INSTRUCTION_FEE_WEI,
+      }),
+    );
+    if (!liveTee || routedToLiveMachine(publishReceipt.logs, liveTee)) break;
+    console.log("  routed to a stale TEE registration — republishing");
+  }
+  if (!publishReceipt) throw new Error("publishSignal never landed");
 
   // ------------------------------------------------------------ 5. TEE result
   step(5, "Waiting for the TEE to decrypt and return a signed authorization");
@@ -248,6 +263,16 @@ async function main() {
  * the second indexed topic, and it is the key the proxy files the result under.
  */
 const TEE_INSTRUCTIONS_SENT_TOPIC = "0xf770e69a9fc05b7180797556ec4cedb6108ce2c56ffa76c84aa087efeb5e6963";
+
+/** The event payload carries the routed teeIds; look for the live one rather than ABI-decoding. */
+function routedToLiveMachine(logs: readonly { topics: readonly Hex[]; data: Hex }[], liveTee: string): boolean {
+  for (const log of logs) {
+    if (log.topics[0]?.toLowerCase() === TEE_INSTRUCTIONS_SENT_TOPIC) {
+      return log.data.toLowerCase().includes(liveTee);
+    }
+  }
+  return false;
+}
 
 function extractInstructionId(logs: readonly { topics: readonly Hex[] }[]): Hex {
   for (const log of logs) {

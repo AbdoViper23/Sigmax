@@ -21,6 +21,8 @@ export interface SigmaxChainConfig {
   slippageBps: number;
   deadlineSecs: number;
   subsFromBlock: bigint;
+  /** Max blocks per eth_getLogs call. The public Coston2 RPC caps this at 30. */
+  logWindow: bigint;
 }
 
 /** Read handler config from env with Coston2 defaults (addresses from docs/flare/reference/phase-0-findings.md). */
@@ -38,6 +40,7 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): SigmaxChain
     slippageBps: Number(env.SIGMAX_SLIPPAGE_BPS ?? "100"),
     deadlineSecs: Number(env.SIGMAX_DEADLINE_SECS ?? "600"),
     subsFromBlock: BigInt(env.SIGMAX_SUBS_FROM_BLOCK ?? "0"),
+    logWindow: BigInt(env.SIGMAX_LOG_WINDOW ?? "30"),
   };
 }
 
@@ -72,6 +75,52 @@ export interface FollowerContext extends FollowerBalance {
 }
 
 /**
+ * Collect distinct subscribers from `Subscribed` logs.
+ *
+ * Scans in windows because the public Coston2 RPC caps `eth_getLogs` at 30 blocks and answers a
+ * wider range with "requested too many blocks" — which surfaced as the whole signal being rejected.
+ * Windows are requested in parallel batches so a few thousand blocks stay well inside the
+ * instruction's time budget. Point `SIGMAX_SUBS_FROM_BLOCK` at the registry's deploy block; a
+ * dedicated RPC with a higher cap can raise `SIGMAX_LOG_WINDOW`.
+ */
+async function readSubscribers(
+  client: PublicClient,
+  cfg: SigmaxChainConfig,
+  strategyId: `0x${string}`,
+): Promise<`0x${string}`[]> {
+  const head = await client.getBlockNumber();
+  const from = cfg.subsFromBlock ?? 0n;
+  if (head < from) return [];
+
+  const window = cfg.logWindow;
+  const ranges: { fromBlock: bigint; toBlock: bigint }[] = [];
+  for (let start = from; start <= head; start += window) {
+    const end = start + window - 1n;
+    ranges.push({ fromBlock: start, toBlock: end > head ? head : end });
+  }
+
+  const subscribers = new Set<`0x${string}`>();
+  const BATCH = 12; // concurrent getLogs calls; keeps us under provider rate limits
+  for (let i = 0; i < ranges.length; i += BATCH) {
+    const batches = await Promise.all(
+      ranges.slice(i, i + BATCH).map((r) =>
+        client.getLogs({
+          address: cfg.subscriptionRegistry,
+          event: SUBSCRIBED_EVENT,
+          args: { strategyId },
+          fromBlock: r.fromBlock,
+          toBlock: r.toBlock,
+        }),
+      ),
+    );
+    for (const logs of batches) {
+      for (const l of logs) if (l.args.subscriber) subscribers.add(l.args.subscriber);
+    }
+  }
+  return [...subscribers];
+}
+
+/**
  * Discover active followers of `strategyId`: Subscribed logs → dedupe → isActive filter →
  * vaultOf → tokenIn balance + vault cap. Returns [] when the registry/factory env is unset.
  */
@@ -83,14 +132,7 @@ export async function readActiveFollowers(
 ): Promise<FollowerContext[]> {
   if (!cfg.subscriptionRegistry || !cfg.vaultFactory) return [];
 
-  const logs = await client.getLogs({
-    address: cfg.subscriptionRegistry,
-    event: SUBSCRIBED_EVENT,
-    args: { strategyId },
-    fromBlock: cfg.subsFromBlock,
-    toBlock: "latest",
-  });
-  const subscribers = [...new Set(logs.map((l) => l.args.subscriber!))];
+  const subscribers = await readSubscribers(client, cfg, strategyId);
 
   const followers: FollowerContext[] = [];
   for (const subscriber of subscribers) {
