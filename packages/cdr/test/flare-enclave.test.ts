@@ -93,6 +93,35 @@ describe("FlareEnclaveCdr", () => {
       expect(fetchImpl).toHaveBeenCalledWith("https://proxy.example/info");
     });
 
+    // What a real tee-node actually serves: the affine coordinate pair, not an encoded key string.
+    // The first live run failed here ("unsupported public key encoding"), so this is pinned.
+    it("assembles the uncompressed key from the {x, y} pair a real proxy returns", async () => {
+      const raw = enclavePub.slice(4); // drop "0x04"
+      const fetchImpl = vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          machineData: { publicKey: { x: `0x${raw.slice(0, 64)}`, y: `0x${raw.slice(64)}` } },
+        }),
+      })) as unknown as typeof fetch;
+
+      const key = await new ProxyEnclaveKeySource("https://proxy.example", fetchImpl).fetchPublicKey();
+
+      expect(key).toBe(enclavePub);
+    });
+
+    // Go renders coordinates via big.Int hex, which drops leading zeros — left-pad or the key is short.
+    it("left-pads coordinates that Go emitted without their leading zeros", async () => {
+      const fetchImpl = (async () => ({
+        ok: true,
+        json: async () => ({ machineData: { publicKey: { x: "0x1a2b", y: "0x3c4d" } } }),
+      })) as unknown as typeof fetch;
+
+      const key = await new ProxyEnclaveKeySource("https://p", fetchImpl).fetchPublicKey();
+
+      expect(key).toBe(`0x04${"1a2b".padStart(64, "0")}${"3c4d".padStart(64, "0")}`);
+      expect(key).toHaveLength(2 + 2 + 128);
+    });
+
     it("throws when the proxy is unreachable or reports no key", async () => {
       const failing = (async () => ({ ok: false, status: 502 })) as unknown as typeof fetch;
       await expect(new ProxyEnclaveKeySource("https://p", failing).fetchPublicKey()).rejects.toThrow(/502/);

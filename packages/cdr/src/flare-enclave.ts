@@ -11,9 +11,35 @@ import { encodeSignal, type Signal } from "@sigmax/shared";
 import type { CdrPort } from "./port.js";
 import { eciesEncrypt, bytesToHex, normalizePublicKey } from "./ecies.js";
 
+/**
+ * The enclave's secp256k1 public key as the proxy reports it. tee-node serves it as the affine
+ * coordinate pair, not as an encoded key — see the note on `coordsToUncompressed`.
+ */
+type ProxyPublicKey = string | { x?: string; y?: string };
+
 /** Shape of the `machineData` block returned by the ext-proxy's `/info` endpoint. */
 interface ProxyInfo {
-  machineData?: { publicKey?: string; teeAddress?: string; extensionId?: string; codeHash?: string };
+  machineData?: { publicKey?: ProxyPublicKey; teeAddress?: string; extensionId?: string; codeHash?: string };
+}
+
+/**
+ * Assemble SEC1 uncompressed form (`0x04 ‖ x ‖ y`) from the coordinate pair.
+ *
+ * tee-node v0.0.25 reports `machineData.publicKey` as `{x, y}` hex strings, NOT as an encoded key
+ * string. Each coordinate is left-padded to 32 bytes: Go emits them via big.Int hex, which drops
+ * leading zeros, so a key with a small x would otherwise assemble one byte short and fail to parse.
+ *
+ * Note this is the enclave's *encryption* key. The TEE's *signing* identity is the registered
+ * machine address and is a different key — do not derive one from the other.
+ */
+function coordsToUncompressed(x: string, y: string): string {
+  const strip = (h: string) => (h.startsWith("0x") ? h.slice(2) : h).toLowerCase();
+  const px = strip(x).padStart(64, "0");
+  const py = strip(y).padStart(64, "0");
+  if (px.length !== 64 || py.length !== 64) {
+    throw new Error(`enclave public key coordinates are not 32 bytes (x=${px.length / 2}B, y=${py.length / 2}B)`);
+  }
+  return `0x04${px}${py}`;
 }
 
 export interface EnclaveKeySource {
@@ -34,7 +60,9 @@ export class ProxyEnclaveKeySource implements EnclaveKeySource {
     const info = (await res.json()) as ProxyInfo;
     const key = info.machineData?.publicKey;
     if (!key) throw new Error("proxy /info did not report machineData.publicKey");
-    return key;
+    if (typeof key === "string") return key;
+    if (!key.x || !key.y) throw new Error("proxy /info publicKey is missing an x or y coordinate");
+    return coordsToUncompressed(key.x, key.y);
   }
 }
 

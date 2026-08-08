@@ -45,6 +45,9 @@ const coston2 = defineChain({
   rpcUrls: { default: { http: [RPC] } },
 });
 
+/** Per-instruction fee charged by TeeExtensionRegistry (fce-sign's DefaultFee). */
+const INSTRUCTION_FEE_WEI = BigInt(process.env.FEE_WEI ?? "1000000000000");
+
 const FXRP: Address = "0x0b6A3645c240605887a5532109323A3E12273dc7";
 const TEST_USD: Address = "0x6623C0BB56aDb150dC9C6BdB8682521354c2BF73";
 const ROUTER: Address = "0x8D29b61C41CF318d15d031BE2928F79630e068e6";
@@ -130,7 +133,14 @@ async function main() {
   if (await publicClient.readContract({ address: registry, abi: REGISTRY_ABI, functionName: "isActive", args: [account.address, strategyId] })) {
     console.log("  already an active subscriber");
   } else {
-    await send("mint testUSD", await walletClient.writeContract({ address: TEST_USD, abi: ERC20, functionName: "mint" }));
+    // The faucet mint is rate-limited (reverts THROTTLED), so only reach for it when we actually
+    // need more than we hold — a repeat demo run should not depend on the faucet at all.
+    const held = await publicClient.readContract({ address: TEST_USD, abi: ERC20, functionName: "balanceOf", args: [account.address] });
+    if (held < 1_000_000n) {
+      await send("mint testUSD", await walletClient.writeContract({ address: TEST_USD, abi: ERC20, functionName: "mint" }));
+    } else {
+      console.log(`  holding ${formatUnits(held, 6)} testUSD already — skipping the faucet`);
+    }
     await send(
       "approve",
       await walletClient.writeContract({ address: TEST_USD, abi: ERC20, functionName: "approve", args: [registry, 1_000_000n] }),
@@ -205,13 +215,17 @@ async function main() {
       abi: SENDER_ABI,
       functionName: "publishSignal",
       args: [strategyId, "", ciphertext],
-      value: 0n,
+      // TeeExtensionRegistry charges a per-instruction fee, forwarded through publishSignal.
+      // Matches fce-sign's DefaultFee (go/tools/pkg/utils/instructions.go); override with FEE_WEI.
+      value: INSTRUCTION_FEE_WEI,
     }),
   );
 
   // ------------------------------------------------------------ 5. TEE result
   step(5, "Waiting for the TEE to decrypt and return a signed authorization");
-  const result = await pollForResult(proxyUrl, publishReceipt.blockNumber);
+  const instructionId = extractInstructionId(publishReceipt.logs);
+  console.log(`  instruction ${instructionId}`);
+  const result = await pollForResult(proxyUrl, instructionId);
   console.log(`  actionId   ${result.actionId}`);
   console.log(`  status     ${result.status}`);
   console.log(`  signature  ${result.signature.slice(0, 22)}…`);
@@ -229,32 +243,47 @@ async function main() {
 }
 
 /**
- * Poll the ext-proxy for the ActionResult produced by our instruction. The proxy exposes results by
- * action id; we scan recent results and take the first SIGNAL/EXECUTE one we can verify is ours.
+ * `TeeInstructionsSent(uint256 indexed extensionId, bytes32 indexed instructionId, uint256 indexed …)`
+ * — emitted by TeeExtensionRegistry when publishSignal routes the ciphertext. The instruction id is
+ * the second indexed topic, and it is the key the proxy files the result under.
  */
-async function pollForResult(proxyUrl: string, fromBlock: bigint, timeoutMs = 180_000): Promise<TeeActionResult> {
+const TEE_INSTRUCTIONS_SENT_TOPIC = "0xf770e69a9fc05b7180797556ec4cedb6108ce2c56ffa76c84aa087efeb5e6963";
+
+function extractInstructionId(logs: readonly { topics: readonly Hex[] }[]): Hex {
+  for (const log of logs) {
+    if (log.topics[0]?.toLowerCase() === TEE_INSTRUCTIONS_SENT_TOPIC && log.topics[2]) {
+      return log.topics[2];
+    }
+  }
+  throw new Error("publishSignal did not emit TeeInstructionsSent — was the extension id set?");
+}
+
+/** Poll the ext-proxy for the ActionResult of a specific instruction. 404 = not processed yet. */
+async function pollForResult(proxyUrl: string, instructionId: Hex, timeoutMs = 240_000): Promise<TeeActionResult> {
   const deadline = Date.now() + timeoutMs;
   let lastError = "";
   while (Date.now() < deadline) {
     try {
-      const res = await fetch(`${proxyUrl}/results?fromBlock=${fromBlock}`);
+      const res = await fetch(`${proxyUrl}/action/result/${instructionId}`);
       if (res.ok) {
-        const body = (await res.json()) as { results?: RawResult[] } | RawResult[];
-        const list = Array.isArray(body) ? body : (body.results ?? []);
-        const hit = list.find((r) => r.status === 1 && r.resultData && r.signature);
-        if (hit) {
+        const body = (await res.json()) as RawResponse;
+        const r = body.result;
+        if (r && r.status !== 0) {
           return {
-            resultData: hit.resultData as Hex,
-            actionId: hit.actionId as Hex,
-            submissionTag: hit.submissionTag ?? "",
-            status: hit.status,
-            signature: hit.signature as Hex,
+            resultData: (r.data ?? "0x") as Hex,
+            actionId: r.id as Hex,
+            submissionTag: r.submissionTag ?? "",
+            status: r.status,
+            signature: body.signature as Hex,
           };
         }
-      } else {
+        if (r?.status === 0) throw new Error(`the TEE rejected the signal: ${r.log ?? "no reason given"}`);
+      } else if (res.status !== 404) {
         lastError = `proxy returned ${res.status}`;
       }
     } catch (e) {
+      // A status-0 result is terminal — don't keep polling through the timeout.
+      if (e instanceof Error && e.message.startsWith("the TEE rejected")) throw e;
       lastError = e instanceof Error ? e.message : String(e);
     }
     process.stdout.write(".");
@@ -263,11 +292,8 @@ async function pollForResult(proxyUrl: string, fromBlock: bigint, timeoutMs = 18
   throw new Error(`no ActionResult within ${timeoutMs / 1000}s${lastError ? ` (last: ${lastError})` : ""}`);
 }
 
-interface RawResult {
-  resultData?: string;
-  actionId?: string;
-  submissionTag?: string;
-  status: number;
+interface RawResponse {
+  result?: { id?: string; submissionTag?: string; status: number; log?: string; data?: string };
   signature?: string;
 }
 

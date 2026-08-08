@@ -81,10 +81,63 @@ full sweep of all 121 BlazeSwap pairs.
 - **ECIES interop: proven** against the tee-node's own go-ethereum (above).
 - **FTSO XRP/USD reads live** on Coston2: sample `1019291` @ 6 decimals ≈ $1.0193 (fee-free view).
 
+## Phase 0a — PASSED live on Coston2 (2026-08-08)
+
+The FCC round-trip works end to end and the TEE-signature gate is proven on-chain.
+
+**Deployed / registered**
+
+| What | Value |
+|---|---|
+| Extension id | `0x…101e1` (66017) |
+| `InstructionSender` | `0x57A8087364438f3F61a31189c6d11C4979362EE8` |
+| TEE machine (`teeAddress`) | `0xBe8E238d68c6AA58EfDE1Ef08F843ed75eDe1BaB` — status **2 = PRODUCTION** |
+| `FlareTeeManager` | `0x1a9C4A0f9D76c0b1D91d22E24E573a9b377618aE` (the post-redeploy diamond) |
+| Code hash | `0x194844cf…` (the simulated-TEE value — `SIMULATED_TEE=true`, accepted for judging) |
+| Proxy | ngrok reserved domain (stable across restarts, as the FCC guidance requires) |
+
+`scripts/test.sh` prints **All tests passed**: an on-chain instruction reached the enclave, was
+decrypted inside it, and the signed result came back through the proxy.
+
+**Control plane (Coston2, chain 114)**
+
+| Contract | Address |
+|---|---|
+| `TeeSigVerifier` | `0x6F57348fB7dA13D1fA8c769beaD1BEaaC091A943` |
+| `CopyVaultFlareFactory` | `0xD2746393C8e1bE019C8d4fd12CF950d6b996eA70` |
+| `SignalRegistry` | `0x132D10A28Fb13dFbBF74bDDCA8828d451DAd7162` |
+| `SubscriptionRegistry` | `0xAEFbE1EDBE57FF7c9851270466979be227AC1139` |
+
+### The signing scheme — corrected, and why it mattered
+
+Capturing a real `ActionResult` caught a bug that would have made the product non-functional. We had
+copied fce-weather-insurance's `settle()` and assumed the TEE personal-signs
+`keccak256(keccak256(data), actionId, keccak256(tag), status)`. It does **not**. The real scheme
+(tee-node v0.0.25) is three layers:
+
+```
+1. inner  = keccak256(keccak256(data) ‖ actionId ‖ keccak256(submissionTag) ‖ status)
+2. signed = keccak256(abi.encode(Payload{ prefix, chainId, dataHash: inner }))
+              prefix = bytes32("TEE_ACTION_RESULT")        // go-flare-common/pkg/signing
+3. sig    = ECDSA over EIP-191 personal-sign of `signed`   // tee-node accounts.TextHash
+```
+
+Layer 2 is the one we were missing. It domain-separates by chain and by payload kind, so an
+ActionResult signature can't be replayed as a vote signature or onto another chain. Without it
+`CopyVaultFlare` would have rejected **every** genuine TEE signature — and the offline tests would
+not have caught it, because they signed with the same wrong scheme.
+
+Two more corrections the live run forced:
+
+- **`teeAddress` is the machine's signing identity** (`0xBe8E238d…`, the registered TEE id). The
+  `publicKey` in the proxy's `/info` is the enclave's **ECIES encryption** key and derives to a
+  *different* address (`0xea0f8e25…`). Gating swaps on that one would have gated them on a key that
+  never signs.
+- **tee-node returns `v` as 0/1**, so the verifier normalizes to 27/28 before `ecrecover`.
+
+Pinned by `packages/contracts/test/TeeSigVerifierFixture.t.sol` against the real captured signature,
+so a regression fails the suite rather than the demo.
+
 ## Pending
-- `teeAddress` — from the FCC round-trip (runbook step 7). **Blocked on Docker + a stable tunnel.**
-- A real `ActionResult` (resultData/actionId/submissionTag/status/signature) — to confirm
-  `TeeSigVerifier` against the live node (runbook step 7).
-- ~~Coston2 stablecoin + funded FXRP pair~~ — **done**, see Phase 0b above.
-- Control-plane deploy addresses (TeeSigVerifier / CopyVaultFlareFactory / SignalRegistry /
-  SubscriptionRegistry) — runbook step 8.
+- One real attested run on GCP Confidential Space (`MODE=0`, real measured code hash) — Phase 3.5.
+  Until then the demo labels simulated mode honestly, as the spec requires.

@@ -61,6 +61,17 @@ services:
       - SIGN_PORT=7701
       - EXTENSION_PORT=7702
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      # --- Sigmax SIGNAL/EXECUTE handler ---
+      # The enclave reads subscriptions and vault balances itself: it must not trust
+      # any caller-supplied follower list, or a caller could redirect a leader's trade
+      # into vaults that never subscribed. Left unset, the handler finds no followers
+      # and returns an empty (still signed) authorization batch.
+      - SIGMAX_RPC_URL=${SIGMAX_RPC_URL:-https://coston2-api.flare.network/ext/C/rpc}
+      - SIGMAX_SUBSCRIPTION_REGISTRY=${SIGMAX_SUBSCRIPTION_REGISTRY:-}
+      - SIGMAX_VAULT_FACTORY=${SIGMAX_VAULT_FACTORY:-}
+      - SIGMAX_ROUTER=${SIGMAX_ROUTER:-}
+      - SIGMAX_SUBS_FROM_BLOCK=${SIGMAX_SUBS_FROM_BLOCK:-}
+      - SIGMAX_SLIPPAGE_BPS=${SIGMAX_SLIPPAGE_BPS:-}
     depends_on:
       - ext-proxy
 
