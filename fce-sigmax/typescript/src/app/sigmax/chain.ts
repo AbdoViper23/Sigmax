@@ -83,14 +83,31 @@ export interface FollowerContext extends FollowerBalance {
  * instruction's time budget. Point `SIGMAX_SUBS_FROM_BLOCK` at the registry's deploy block; a
  * dedicated RPC with a higher cap can raise `SIGMAX_LOG_WINDOW`.
  */
+/**
+ * Subscriber sets per strategy, with the block they were scanned up to.
+ *
+ * Rescanning the whole history on every signal blew the node's HTTP timeout for the action, which
+ * the proxy reported as a pending (status 3) result — the authorization was correct but arrived too
+ * late to be the answer. Each signal now scans only the blocks since the previous one. Subscriptions
+ * are append-only (`Subscribed` is emitted on every renewal too, and expiry is re-checked via
+ * `isActive` below), so a cached address can go inactive but can never be wrongly dropped.
+ *
+ * In-enclave memory only: it holds public addresses, never any part of a signal.
+ */
+const subscriberCache = new Map<string, { scannedTo: bigint; subscribers: Set<`0x${string}`> }>();
+
 async function readSubscribers(
   client: PublicClient,
   cfg: SigmaxChainConfig,
   strategyId: `0x${string}`,
 ): Promise<`0x${string}`[]> {
   const head = await client.getBlockNumber();
-  const from = cfg.subsFromBlock ?? 0n;
-  if (head < from) return [];
+  const cacheKey = `${cfg.subscriptionRegistry}:${strategyId}`.toLowerCase();
+  const cached = subscriberCache.get(cacheKey);
+
+  // Resume from just after the last scan; otherwise start at the configured floor.
+  const from = cached ? cached.scannedTo + 1n : (cfg.subsFromBlock ?? 0n);
+  if (head < from) return cached ? [...cached.subscribers] : [];
 
   const window = cfg.logWindow;
   const ranges: { fromBlock: bigint; toBlock: bigint }[] = [];
@@ -99,8 +116,8 @@ async function readSubscribers(
     ranges.push({ fromBlock: start, toBlock: end > head ? head : end });
   }
 
-  const subscribers = new Set<`0x${string}`>();
-  const BATCH = 12; // concurrent getLogs calls; keeps us under provider rate limits
+  const subscribers = cached ? cached.subscribers : new Set<`0x${string}`>();
+  const BATCH = 30; // concurrent getLogs calls; the node's action timeout is the binding constraint
   for (let i = 0; i < ranges.length; i += BATCH) {
     const batches = await Promise.all(
       ranges.slice(i, i + BATCH).map((r) =>
@@ -117,6 +134,8 @@ async function readSubscribers(
       for (const l of logs) if (l.args.subscriber) subscribers.add(l.args.subscriber);
     }
   }
+
+  subscriberCache.set(cacheKey, { scannedTo: head, subscribers });
   return [...subscribers];
 }
 

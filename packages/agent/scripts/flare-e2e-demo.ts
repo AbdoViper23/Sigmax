@@ -217,30 +217,44 @@ async function main() {
   // demo reliable even with several stale machines. The production fix is for the sender to request
   // getRandomTeeIds(extensionId, n) and fan the instruction out to every machine.
   const liveTee = process.env.LIVE_TEE_ID?.toLowerCase().replace(/^0x/, "");
-  let publishReceipt: Awaited<ReturnType<typeof publicClient.waitForTransactionReceipt>> | undefined;
-  for (let attempt = 1; attempt <= 20; attempt++) {
-    publishReceipt = await send(
-      `publishSignal (attempt ${attempt})`,
-      await walletClient.writeContract({
-        address: sender,
-        abi: SENDER_ABI,
-        functionName: "publishSignal",
-        args: [strategyId, "", ciphertext],
-        // TeeExtensionRegistry charges a per-instruction fee, forwarded through publishSignal.
-        // Matches fce-sign's DefaultFee (go/tools/pkg/utils/instructions.go); override with FEE_WEI.
-        value: INSTRUCTION_FEE_WEI,
-      }),
-    );
-    if (!liveTee || routedToLiveMachine(publishReceipt.logs, liveTee)) break;
-    console.log("  routed to a stale TEE registration — republishing");
-  }
-  if (!publishReceipt) throw new Error("publishSignal never landed");
+  const publishOnce = async () => {
+    for (let attempt = 1; attempt <= 20; attempt++) {
+      const receipt = await send(
+        `publishSignal (attempt ${attempt})`,
+        await walletClient.writeContract({
+          address: sender,
+          abi: SENDER_ABI,
+          functionName: "publishSignal",
+          args: [strategyId, "", ciphertext],
+          // TeeExtensionRegistry charges a per-instruction fee, forwarded through publishSignal.
+          // Matches fce-sign's DefaultFee (go/tools/pkg/utils/instructions.go); override with FEE_WEI.
+          value: INSTRUCTION_FEE_WEI,
+        }),
+      );
+      if (!liveTee || routedToLiveMachine(receipt.logs, liveTee)) return receipt;
+      console.log("  routed to a stale TEE registration — republishing");
+    }
+    throw new Error("never routed to the live TEE machine in 20 attempts");
+  };
+  let publishReceipt = await publishOnce();
 
   // ------------------------------------------------------------ 5. TEE result
   step(5, "Waiting for the TEE to decrypt and return a signed authorization");
-  const instructionId = extractInstructionId(publishReceipt.logs);
-  console.log(`  instruction ${instructionId}`);
-  const result = await pollForResult(proxyUrl, instructionId);
+  let result: TeeActionResult | undefined;
+  for (let round = 1; round <= 3 && !result; round++) {
+    const instructionId = extractInstructionId(publishReceipt.logs);
+    console.log(`  instruction ${instructionId}`);
+    try {
+      result = await pollForResult(proxyUrl, instructionId, 150_000);
+    } catch (e) {
+      if (!(e instanceof PendingTimeout) || round === 3) throw e;
+      // The enclave's first scan of this strategy overran the node's action timeout. Its subscriber
+      // cache is warm now, so a second signal is answered promptly.
+      console.log("\n  still pending — republishing now that the enclave has scanned this strategy");
+      publishReceipt = await publishOnce();
+    }
+  }
+  if (!result) throw new Error("no signed authorization");
   console.log(`  actionId   ${result.actionId}`);
   console.log(`  status     ${result.status}`);
   console.log(`  signature  ${result.signature.slice(0, 22)}…`);
@@ -293,7 +307,10 @@ async function pollForResult(proxyUrl: string, instructionId: Hex, timeoutMs = 2
       if (res.ok) {
         const body = (await res.json()) as RawResponse;
         const r = body.result;
-        if (r && r.status !== 0) {
+        // FCC status: 0 = error (terminal), 1 = success, >= 2 = still working. The handler scans
+        // subscription logs in 30-block windows, so a pending status here is normal — keep waiting.
+        if (r?.status === 0) throw new Error(`the TEE rejected the signal: ${r.log ?? "no reason given"}`);
+        if (r?.status === 1) {
           return {
             resultData: (r.data ?? "0x") as Hex,
             actionId: r.id as Hex,
@@ -302,7 +319,6 @@ async function pollForResult(proxyUrl: string, instructionId: Hex, timeoutMs = 2
             signature: body.signature as Hex,
           };
         }
-        if (r?.status === 0) throw new Error(`the TEE rejected the signal: ${r.log ?? "no reason given"}`);
       } else if (res.status !== 404) {
         lastError = `proxy returned ${res.status}`;
       }
@@ -314,8 +330,14 @@ async function pollForResult(proxyUrl: string, instructionId: Hex, timeoutMs = 2
     process.stdout.write(".");
     await new Promise((r) => setTimeout(r, 5_000));
   }
-  throw new Error(`no ActionResult within ${timeoutMs / 1000}s${lastError ? ` (last: ${lastError})` : ""}`);
+  throw new PendingTimeout(`no successful ActionResult within ${timeoutMs / 1000}s${lastError ? ` (last: ${lastError})` : ""}`);
 }
+
+/**
+ * The result never reached success in time. Usually the enclave's first subscriber scan overran the
+ * node's action timeout; its cache is warm afterwards, so republishing is the right response.
+ */
+class PendingTimeout extends Error {}
 
 interface RawResponse {
   result?: { id?: string; submissionTag?: string; status: number; log?: string; data?: string };

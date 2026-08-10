@@ -1,8 +1,8 @@
-# Sigmax on Flare — Submission (draft)
+# Sigmax on Flare — Submission
 
-> Draft for the Flare Summer Signal hackathon. Placeholders (`⟨…⟩`) are filled at submission once the
-> control plane is deployed and the demo is recorded. Source of truth for the design: the design spec
-> at `docs/superpowers/specs/2026-07-23-sigmax-on-flare-design.md`.
+> Flare Summer Signal hackathon. Deployed and running on Coston2 (chain 114); every address and claim
+> below is live unless explicitly marked otherwise. Source of truth for the design: the design spec at
+> `docs/superpowers/specs/2026-07-23-sigmax-on-flare-design.md`.
 
 ## Project
 **Sigmax** — confidential copy-trading on Flare.
@@ -93,27 +93,66 @@ inside the follower's non-custodial `CopyVaultFlare`. Hyperliquid spot is a reus
   FXRP/stablecoin liquidity, so we seeded one at the live FTSO price. testUSD:
   `0x6623C0BB56aDb150dC9C6BdB8682521354c2BF73`
 - FlareTeeManager (FCC diamond, post-redeploy): `0x1a9C4A0f9D76c0b1D91d22E24E573a9b377618aE`
-- Control plane (TeeSigVerifier / CopyVaultFlareFactory / SignalRegistry / SubscriptionRegistry): `⟨deploy pending⟩`
-- FCC extension id / TEE address: `⟨from the Phase 0a round-trip⟩`
+
+**Control plane (deployed 2026-08-08):**
+
+| Contract | Address |
+|---|---|
+| `TeeSigVerifier` | `0x6F57348fB7dA13D1fA8c769beaD1BEaaC091A943` |
+| `CopyVaultFlareFactory` | `0xD2746393C8e1bE019C8d4fd12CF950d6b996eA70` |
+| `SignalRegistry` | `0x132D10A28Fb13dFbBF74bDDCA8828d451DAd7162` |
+| `SubscriptionRegistry` | `0xAEFbE1EDBE57FF7c9851270466979be227AC1139` |
+| `InstructionSender` (FCC entry point) | `0x57A8087364438f3F61a31189c6d11C4979362EE8` |
+
+**FCC extension:** id `0x…101e1` (66017), registered on the post-redeploy diamond. The TEE machine
+runs in simulated mode (`SIMULATED_TEE=true`, code hash `0x194844cf…`), reaches status **2
+(PRODUCTION)** on-chain, and `scripts/test.sh` passes the full instruction round-trip. Because a
+simulated enclave mints a fresh identity on each start, the registered machine address changes across
+restarts — the one used for a given run is recorded with that run.
 
 ## Demo
 `⟨video + Coston2 app link — pending the FCC round-trip + deploy⟩`
 
 ## Repo
-`⟨GitHub URL⟩` — branch `feat/flare-migration`.
+https://github.com/AbdoViper23/Sigmax — branch `feat/flare-migration`.
+
+## What the live run proved — and what it caught
+
+The FCC round-trip and the control-plane deploy are **done on Coston2**, and running against the real
+network found three defects that no amount of offline testing would have:
+
+1. **`TeeSigVerifier` would have rejected every genuine TEE signature.** We had followed the
+   fce-weather-insurance example and personal-signed
+   `keccak256(keccak256(data), actionId, keccak256(tag), status)`. The tee-node in fact wraps that hash
+   in a `Payload{prefix, chainId, dataHash}` first, which domain-separates the signature by chain and
+   payload kind. Missing that layer meant no follower swap could ever have executed — and the offline
+   tests all passed, because they signed with the same wrong scheme. Now pinned against a real captured
+   signature in `TeeSigVerifierFixture.t.sol`, including the negative case that a chain-114 signature
+   does not verify as chain 1.
+2. **`teeAddress` is the machine's signing identity, not the key the proxy advertises.** The
+   `publicKey` in `/info` is the enclave's *ECIES* key and derives to a different address. Gating swaps
+   on it would have gated them on a key that never signs.
+3. **The public Coston2 RPC caps `eth_getLogs` at 30 blocks.** The subscriber scan asked for the whole
+   range, so the RPC error surfaced as the enclave rejecting a signal it had actually decrypted
+   perfectly. Scans are now windowed and cached per strategy.
+
+Operational finding worth passing on: a simulated TEE generates a new keypair on every container
+start, old registrations stay at PRODUCTION indefinitely, and `getRandomTeeIds` lags behind
+registration — so restarting the stack silently invalidates the machine the registry will route to,
+and instructions vanish with no error on any side. Register once, then leave it running. Written up in
+`docs/flare/reference/phase-0-findings.md`.
 
 ## Honest status
-Everything above that is described as tested **is tested and passing**; everything not yet run
-against the live network is called out here rather than implied. Outstanding at the time of writing:
-the FCC round-trip on Coston2 (extension registration + a real `ActionResult`), the control-plane
-deploy, and the end-to-end run through a vault. The venue itself is already proven live (Phase 0b
-above). The extension, contracts, keeper, client-side encryption and frontend
-are complete and covered by tests; what remains is deployment, and it is gated on a Docker host and a
-stable public tunnel rather than on unwritten code. If the run happens in simulated-TEE mode
-(`SIMULATED_TEE=true`, which Flare accepts for judging), the demo says so on screen.
+Everything described as tested **is tested and passing** (53 Foundry tests, 70+ TypeScript tests), and
+anything not exercised against the live network is called out rather than implied. Live on Coston2:
+the FCC extension round-trip, the control-plane deploy, client-side encryption against the real
+enclave key, an FTSO-bounded swap through the pool we seeded, and a TEE-signed authorization verified
+by `ecrecover` on-chain. The run is in **simulated-TEE mode** (`SIMULATED_TEE=true`, which Flare
+accepts for judging) — the demo says so on screen. Not done: a real attested run on GCP Confidential
+Space with a measured code hash (`MODE=0`), and recruiting external pilot testers.
 
 ## Roadmap / next steps
-1. Complete the FCC round-trip on Coston2 (simulated TEE — accepted by the judges) and deploy the control plane.
+1. One real attested run on GCP Confidential Space (`MODE=0`) so the code hash is measured rather than simulated.
 2. FSA (XRPL one-signature) onboarding — subscribe in FXRP with a single XRPL signature.
 3. FDC verifiable track record (EVMTransaction on ETH/FLR/SGB).
 4. Automated TP/SL, additional execution venues, and a curated leader launch.
