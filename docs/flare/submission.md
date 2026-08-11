@@ -102,9 +102,9 @@ inside the follower's non-custodial `CopyVaultFlare`. Hyperliquid spot is a reus
 | `CopyVaultFlareFactory` | `0xD2746393C8e1bE019C8d4fd12CF950d6b996eA70` |
 | `SignalRegistry` | `0x132D10A28Fb13dFbBF74bDDCA8828d451DAd7162` |
 | `SubscriptionRegistry` | `0xAEFbE1EDBE57FF7c9851270466979be227AC1139` |
-| `InstructionSender` (FCC entry point) | `0x57A8087364438f3F61a31189c6d11C4979362EE8` |
+| `InstructionSender` (FCC entry point) | `0x14D54C022A9c2321BAeba1478c46018e21609f26` (extension `0x…1024f` / 66127) |
 
-**FCC extension:** id `0x…101e1` (66017), registered on the post-redeploy diamond. The TEE machine
+**FCC extension:** id `0x…1024f` (66127), registered on the post-redeploy diamond. The TEE machine
 runs in simulated mode (`SIMULATED_TEE=true`, code hash `0x194844cf…`), reaches status **2
 (PRODUCTION)** on-chain, and `scripts/test.sh` passes the full instruction round-trip. Because a
 simulated enclave mints a fresh identity on each start, the registered machine address changes across

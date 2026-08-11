@@ -6,6 +6,42 @@
       "sourceType": "github",
       "skillPath": "skills/cdr/SKILL.md",
       "computedHash": "91ea35c63c639ee02dbed2f9581aca4a5ca4e8905ddae8e130a7c4b7df8961ed"
+    },
+    "flare-fassets": {
+      "source": "flare-foundation/flare-ai-skills",
+      "sourceType": "github",
+      "skillPath": "skills/flare-fassets-skill/SKILL.md",
+      "computedHash": "f91bf0f30cb4ce9c31443098c048c6001b2e22537433e573d6c0324ca7a80f81"
+    },
+    "flare-fcc": {
+      "source": "flare-foundation/flare-ai-skills",
+      "sourceType": "github",
+      "skillPath": "skills/flare-fcc-skill/SKILL.md",
+      "computedHash": "647c7e789c53da12493c5cbcef264f4c56e37c2b9fd0971398dba024bba1af0d"
+    },
+    "flare-fdc": {
+      "source": "flare-foundation/flare-ai-skills",
+      "sourceType": "github",
+      "skillPath": "skills/flare-fdc-skill/SKILL.md",
+      "computedHash": "dc9a675bedf2ff1665c968a695c6e1a74f086e98d7e22737da23d32920639413"
+    },
+    "flare-ftso": {
+      "source": "flare-foundation/flare-ai-skills",
+      "sourceType": "github",
+      "skillPath": "skills/flare-ftso-skill/SKILL.md",
+      "computedHash": "2fb11320b52cb6f88f2004b024813893d550197440d6b97b19eae28cbd8af60e"
+    },
+    "flare-general": {
+      "source": "flare-foundation/flare-ai-skills",
+      "sourceType": "github",
+      "skillPath": "skills/flare-general-skill/SKILL.md",
+      "computedHash": "0e83d065f0b0054b7231d860f327603e59e22a352069faa9edfc55f1b9e9a8a4"
+    },
+    "flare-smart-accounts": {
+      "source": "flare-foundation/flare-ai-skills",
+      "sourceType": "github",
+      "skillPath": "skills/flare-smart-accounts-skill/SKILL.md",
+      "computedHash": "06108b07dd0611c96a984d1cb8299ae58f43d49fd51e610f6658d8de40af88e6"
     }
   }
 }

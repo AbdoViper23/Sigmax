@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { secp256k1 } from "@noble/curves/secp256k1";
 import { decodeSignal, type Signal } from "@sigmax/shared";
-import { FlareEnclaveCdr, StaticEnclaveKeySource, ProxyEnclaveKeySource } from "../src/flare-enclave.js";
+import { EnclaveSignalSealer, StaticEnclaveKeySource, ProxyEnclaveKeySource } from "../src/sealer.js";
 import { eciesDecrypt, bytesToHex } from "../src/ecies.js";
 
 const enclavePriv = secp256k1.utils.randomPrivateKey();
@@ -34,8 +34,8 @@ function hexToBytes(hex: string): Uint8Array {
   return out;
 }
 
-describe("FlareEnclaveCdr", () => {
-  const cdr = () => new FlareEnclaveCdr(new StaticEnclaveKeySource(enclavePub));
+describe("EnclaveSignalSealer", () => {
+  const cdr = () => new EnclaveSignalSealer(new StaticEnclaveKeySource(enclavePub));
 
   it("encrypts a signal that only the enclave key can decrypt back to the original", async () => {
     const { ciphertext } = await cdr().encryptSignal(signal);
@@ -62,7 +62,7 @@ describe("FlareEnclaveCdr", () => {
 
   it("fetches the enclave key once and caches it", async () => {
     const fetchPublicKey = vi.fn(async () => enclavePub);
-    const instance = new FlareEnclaveCdr({ fetchPublicKey });
+    const instance = new EnclaveSignalSealer({ fetchPublicKey });
 
     await instance.encryptSignal(signal);
     await instance.encryptSignal(signal);

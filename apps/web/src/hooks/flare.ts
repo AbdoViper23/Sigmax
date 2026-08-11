@@ -10,7 +10,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useAccount, usePublicClient, useWalletClient } from "wagmi";
 import { formatUnits, zeroAddress, type Hex } from "viem";
-import { FlareEnclaveCdr, ProxyEnclaveKeySource } from "@sigmax/cdr";
+import { EnclaveSignalSealer, ProxyEnclaveKeySource } from "@sigmax/enclave-crypto";
 import type { Signal } from "@sigmax/shared";
 import { env, flareConfigReady } from "../lib/env";
 
@@ -43,15 +43,15 @@ const FTSO_V2_ABI = [
 ] as const;
 
 /** Lazily built so a missing proxy URL surfaces at publish time, not at module load. */
-function makeCdr(): FlareEnclaveCdr {
+function makeCdr(): EnclaveSignalSealer {
   if (!env.flareProxyUrl) {
     throw new Error("VITE_FLARE_PROXY_URL is not set — cannot fetch the enclave key to encrypt against");
   }
-  return new FlareEnclaveCdr(new ProxyEnclaveKeySource(env.flareProxyUrl));
+  return new EnclaveSignalSealer(new ProxyEnclaveKeySource(env.flareProxyUrl));
 }
 
-let cdrInstance: FlareEnclaveCdr | null = null;
-function cdr(): FlareEnclaveCdr {
+let cdrInstance: EnclaveSignalSealer | null = null;
+function cdr(): EnclaveSignalSealer {
   if (cdrInstance === null) cdrInstance = makeCdr();
   return cdrInstance;
 }

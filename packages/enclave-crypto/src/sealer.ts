@@ -1,14 +1,14 @@
 /**
- * `FlareEnclaveCdr` — the Flare replacement for Story CDR.
+ * `EnclaveSignalSealer` — the confidentiality primitive of the whole product.
  *
- * Confidentiality primitive: the leader ABI-encodes the signal and ECIES-encrypts it to the FCC
+ * The leader ABI-encodes the signal and ECIES-encrypts it to the FCC
  * enclave's published public key, **in the browser**. Only ciphertext leaves the client; the
  * plaintext exists in exactly two places — the leader's tab and the enclave's memory. Nothing on
  * this path can decrypt a signal, which is why `accessSignal` is unimplementable here by design.
  */
 
 import { encodeSignal, type Signal } from "@sigmax/shared";
-import type { CdrPort } from "./port.js";
+import type { SealedSignalPort } from "./port.js";
 import { eciesEncrypt, bytesToHex, normalizePublicKey } from "./ecies.js";
 
 /**
@@ -74,14 +74,14 @@ export class StaticEnclaveKeySource implements EnclaveKeySource {
   }
 }
 
-export interface FlarePublishResult {
+export interface SealedSignal {
   /** The ECIES ciphertext to pass to `InstructionSender.publishSignal`. */
   ciphertext: `0x${string}`;
   /** keccak256 of the ciphertext is computed on-chain; kept here only for display/logging. */
   byteLength: number;
 }
 
-export class FlareEnclaveCdr implements CdrPort {
+export class EnclaveSignalSealer implements SealedSignalPort {
   private cachedKey: Uint8Array | null = null;
 
   constructor(private readonly keySource: EnclaveKeySource) {}
@@ -98,7 +98,7 @@ export class FlareEnclaveCdr implements CdrPort {
    * Encrypt a signal to the enclave. Returns the ciphertext for the caller to submit on-chain —
    * this class never touches a wallet, so publishing stays an explicit, user-signed action.
    */
-  async encryptSignal(signal: Signal): Promise<FlarePublishResult> {
+  async encryptSignal(signal: Signal): Promise<SealedSignal> {
     const key = await this.enclavePublicKey();
     const plaintext = hexToBytes(encodeSignal(signal));
     const ct = eciesEncrypt(key, plaintext);
@@ -111,7 +111,7 @@ export class FlareEnclaveCdr implements CdrPort {
    */
   async publishSignal(): Promise<{ uuid: number }> {
     throw new Error(
-      "FlareEnclaveCdr does not publish on the leader's behalf — call encryptSignal() and submit the ciphertext with the user's wallet",
+      "EnclaveSignalSealer does not publish on the leader's behalf — call encryptSignal() and submit the ciphertext with the user's wallet",
     );
   }
 

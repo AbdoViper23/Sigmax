@@ -3,7 +3,7 @@
   "compilerOptions": {
     "outDir": "./dist",
     "rootDir": "./src",
-    // The sealer that needed DOM lib moved to @sigmax/enclave-crypto; this stays for parity
+    // EnclaveSignalSealer runs in the leader's browser (client-side encryption), so this package needs
     // the web platform globals — `crypto.getRandomValues` and `fetch`. Both also exist in Node 18+.
     "lib": ["ES2022", "DOM"]
   },

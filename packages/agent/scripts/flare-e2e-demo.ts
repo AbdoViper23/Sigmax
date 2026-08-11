@@ -32,7 +32,7 @@ import {
   type Hex,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { FlareEnclaveCdr, ProxyEnclaveKeySource } from "@sigmax/cdr";
+import { EnclaveSignalSealer, ProxyEnclaveKeySource } from "@sigmax/enclave-crypto";
 import type { Signal } from "@sigmax/shared";
 import { relayActionResult, type TeeActionResult } from "../src/flare/keeper.js";
 
@@ -195,7 +195,7 @@ async function main() {
     expiresAt: now + 3600,
   };
 
-  const cdr = new FlareEnclaveCdr(new ProxyEnclaveKeySource(proxyUrl));
+  const cdr = new EnclaveSignalSealer(new ProxyEnclaveKeySource(proxyUrl));
   const { ciphertext, byteLength } = await cdr.encryptSignal(signal);
   console.log(`  signalId   ${signal.signalId}`);
   console.log(`  ciphertext ${byteLength} bytes, commitment ${keccak256(ciphertext).slice(0, 18)}…`);

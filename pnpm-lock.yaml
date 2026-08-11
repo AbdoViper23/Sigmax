@@ -107,9 +107,9 @@ importers:
       '@rainbow-me/rainbowkit':
         specifier: ^2.2.11
         version: 2.2.11(@tanstack/react-query@5.100.14(react@19.2.6))(@types/react@19.2.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(typescript@5.8.3)(viem@2.51.3(bufferutil@4.1.0)(typescript@5.8.3)(utf-8-validate@5.0.10)(zod@3.24.2))(wagmi@2.19.5(@tanstack/query-core@5.100.14)(@tanstack/react-query@5.100.14(react@19.2.6))(@types/react@19.2.15)(bufferutil@4.1.0)(db0@0.3.4)(react@19.2.6)(typescript@5.8.3)(utf-8-validate@5.0.10)(viem@2.51.3(bufferutil@4.1.0)(typescript@5.8.3)(utf-8-validate@5.0.10)(zod@3.24.2))(zod@3.24.2))
-      '@sigmax/cdr':
+      '@sigmax/enclave-crypto':
         specifier: workspace:*
-        version: link:../../packages/cdr
+        version: link:../../packages/enclave-crypto
       '@sigmax/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -264,6 +264,9 @@ importers:
       '@sigmax/cdr':
         specifier: workspace:*
         version: link:../cdr
+      '@sigmax/enclave-crypto':
+        specifier: workspace:*
+        version: link:../enclave-crypto
       '@sigmax/shared':
         specifier: workspace:*
         version: link:../shared
@@ -317,6 +320,28 @@ importers:
       typescript:
         specifier: ^5.7.2
         version: 5.7.2
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.8(@types/node@22.19.19)(lightningcss@1.32.0)
+
+  packages/enclave-crypto:
+    dependencies:
+      '@noble/ciphers':
+        specifier: ^1.3.0
+        version: 1.3.0
+      '@noble/curves':
+        specifier: ^1.9.7
+        version: 1.9.7
+      '@noble/hashes':
+        specifier: ^1.8.0
+        version: 1.8.0
+      '@sigmax/shared':
+        specifier: workspace:*
+        version: link:../shared
+    devDependencies:
+      typescript:
+        specifier: ^5.7.2
+        version: 5.8.3
       vitest:
         specifier: ^2.1.8
         version: 2.1.8(@types/node@22.19.19)(lightningcss@1.32.0)
