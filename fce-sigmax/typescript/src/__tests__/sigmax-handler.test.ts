@@ -71,6 +71,8 @@ const config: SigmaxChainConfig = {
   slippageBps: 100,
   deadlineSecs: 600,
   subsFromBlock: 0n,
+  // The mocked head is 1000, so one window covers the whole range in a single getLogs call.
+  logWindow: 1_000n,
 };
 
 /**
@@ -83,6 +85,9 @@ function makeClient(over: { balances?: Record<string, bigint>; active?: Record<s
   const subscriberOf: Record<string, string> = { subA: VAULT_A, subB: VAULT_B };
 
   return {
+    // The subscriber scan is windowed against the chain head (the public RPC caps eth_getLogs at 30
+    // blocks), so it reads the head first. One window keeps these tests focused on the handler.
+    getBlockNumber: vi.fn(async () => 1_000n),
     getLogs: vi.fn(async () => [
       { args: { subscriber: "subA" } },
       { args: { subscriber: "subB" } },

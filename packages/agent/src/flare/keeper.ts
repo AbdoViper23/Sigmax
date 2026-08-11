@@ -169,7 +169,35 @@ async function relayOne(
   }
 }
 
+/** Known CopyVaultFlare custom errors, by selector — so a revert names the guard that fired. */
+const VAULT_ERRORS: Record<string, string> = {
+  "0x168f8aad": "MinOut",
+  "0x81ceff30": "SwapFailed",
+  "0xc6faa85f": "BadTeeSignature",
+  "0xa4875a49": "CapExceeded",
+  "0xf84835a0": "TokenNotWhitelisted",
+  "0xb76b08ae": "RouterNotWhitelisted",
+  "0xa4c91367": "AuthExpired",
+  "0xae6a6625": "AuthAlreadyUsed",
+  "0xe224e0ca": "WrongVault",
+  "0x10dfc033": "WrongChain",
+  "0x5c975bda": "BadStatus",
+  "0x6c47fd6a": "TeeAddressUnset",
+  "0x30cd7471": "NotOwner",
+  "0x9e87fac8": "Paused",
+};
+
+/**
+ * One line naming what actually failed. viem puts the custom-error selector several lines into its
+ * message, so taking only the first line reports "reverted" and nothing actionable — which is useless
+ * when the whole point is knowing which guard rejected the authorization.
+ */
+export function describeRevert(msg: string): string {
+  const named = Object.entries(VAULT_ERRORS).find(([sel, name]) => msg.includes(sel) || msg.includes(`${name}()`));
+  const first = msg.split("\n")[0]!.slice(0, 160);
+  return named ? `${named[1]}() — ${first}` : first;
+}
+
 function shortReason(e: unknown): string {
-  const msg = e instanceof Error ? e.message : String(e);
-  return msg.split("\n")[0]!.slice(0, 200);
+  return describeRevert(e instanceof Error ? e.message : String(e));
 }

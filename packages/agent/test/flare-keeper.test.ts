@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import type { Account, Hex } from "viem";
-import { relayActionResult, type KeeperClients, type TeeActionResult } from "../src/flare/keeper.js";
+import { toFunctionSelector, type Account, type Hex } from "viem";
+import { relayActionResult, describeRevert, type KeeperClients, type TeeActionResult } from "../src/flare/keeper.js";
 import { encodeSwapAuths } from "../src/flare/process-signal.js";
 import type { SwapAuth } from "../src/flare/swap-auth.js";
 
@@ -162,5 +162,45 @@ describe("flare keeper", () => {
 
     expect(Object.keys(outcome!).sort()).toEqual(["index", "reason", "status", "vault"]);
     expect(outcome!.reason).not.toContain("0xdeadbeef"); // only the first line is kept
+  });
+});
+
+/**
+ * The selector table exists so a revert names the guard that fired instead of just "reverted". A wrong
+ * entry is worse than no entry: it reports the wrong guard and sends you debugging the wrong thing.
+ * One entry was in fact wrong (TeeAddressUnset carried a selector from an unrelated contract's
+ * revert), so these are pinned against selectors computed from the signatures themselves.
+ */
+describe("vault error selectors", () => {
+  const EXPECTED: Record<string, string> = {
+    "MinOut()": "0x168f8aad",
+    "SwapFailed()": "0x81ceff30",
+    "BadTeeSignature()": "0xc6faa85f",
+    "CapExceeded()": "0xa4875a49",
+    "TokenNotWhitelisted()": "0xf84835a0",
+    "RouterNotWhitelisted()": "0xb76b08ae",
+    "AuthExpired()": "0xa4c91367",
+    "AuthAlreadyUsed()": "0xae6a6625",
+    "WrongVault()": "0xe224e0ca",
+    "WrongChain()": "0x10dfc033",
+    "BadStatus()": "0x5c975bda",
+    "TeeAddressUnset()": "0x6c47fd6a",
+    "NotOwner()": "0x30cd7471",
+    "Paused()": "0x9e87fac8",
+  };
+  // Cross-checked against `forge inspect CopyVaultFlare errors`.
+
+  it("match keccak256(signature)[0:4] for every CopyVaultFlare error", () => {
+    for (const [sig, selector] of Object.entries(EXPECTED)) {
+      expect(toFunctionSelector(sig), `${sig} selector`).toBe(selector);
+    }
+  });
+
+  it("names the guard when the revert message carries its selector", () => {
+    for (const [sig, selector] of Object.entries(EXPECTED)) {
+      const name = sig.replace("()", "");
+      const reason = describeRevert(`Execution reverted\n\nsignature: ${selector}\n`);
+      expect(reason, `${sig} should be named`).toContain(name);
+    }
   });
 });

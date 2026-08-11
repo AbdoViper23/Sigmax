@@ -168,6 +168,36 @@ arrives", and no amount of retrying fixes it until the selection set advances.
   `getRandomTeeIds(extensionId, n)` with `n` > 1 so every registered machine receives the
   instruction and the live one answers. Redundancy is the point of the API.
 
+### Phase 3 — full end-to-end run, live (2026-08-11)
+
+A leader published an encrypted signal and a follower's vault executed the copied swap, with the TEE
+signature checked on-chain in between. Nothing was mocked.
+
+| | |
+|---|---|
+| Extension / sender | id `0x…1024f` (66127) · `0x14D54C022A9c2321BAeba1478c46018e21609f26` |
+| TEE machine | `0x736148d4fC26E9E259D80B268d435d823F7CF7C5` (status 2) |
+| Follower vault | `0x86a072E008f596fa68e8C7608cB48D393914Cbe2` |
+| Swap tx | [`0xac6b2603…`](https://coston2-explorer.flare.network/tx/0xac6b2603117d9c79d6a321dcbc8e89f9f646a07252e2b119252e98def5ceff33) |
+| Vault before → after | 0.500000 FXRP / 0 testUSD → **0.475000 FXRP / 0.025080 testUSD** |
+| Signed authorization | `amountIn` 25000, FTSO-bounded `minOut` 25286→25023, deadline + chainId 114 bound |
+
+The enclave answered in ~5 s once its subscriber scan was cached, and the demo asserts mid-run that
+the take-profit and stop-loss cannot be recovered from the published bytes.
+
+### The bug that made every swap fail: `${VAR:-}` is not "unset"
+
+The last blocker looked like a DEX problem and wasn't. `docker-compose` renders `${SIGMAX_SLIPPAGE_BPS:-}`
+for an unset variable as the **empty string**, which is not nullish — so `Number(env.X ?? "100")` took
+`Number("")` and produced **0**. Zero slippage tolerance means the authorization demands the exact FTSO
+price, so BlazeSwap rejected every swap with `INSUFFICIENT_OUTPUT_AMOUNT` and the vault reported
+`SwapFailed()`. The signal, the signature, the sizing and the routing were all correct; only the bound
+was unachievable. `configFromEnv` now treats blank as absent for every value.
+
+Related: the keeper used to report only viem's first error line ("reverted"), which hides the custom
+error. It now names the guard that fired, with the selector table pinned by a test against
+`forge inspect CopyVaultFlare errors` — one entry had been copied from an unrelated contract's revert.
+
 ### Two more live-only findings
 
 - **The public Coston2 RPC caps `eth_getLogs` at 30 blocks.** A wider range fails with "requested too

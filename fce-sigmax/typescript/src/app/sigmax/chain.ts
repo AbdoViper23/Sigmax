@@ -29,18 +29,32 @@ export interface SigmaxChainConfig {
 export function configFromEnv(env: NodeJS.ProcessEnv = process.env): SigmaxChainConfig {
   const addr = (v: string | undefined): `0x${string}` | undefined =>
     v && /^0x[0-9a-fA-F]{40}$/.test(v) ? (v as `0x${string}`) : undefined;
+
+  /**
+   * Treat an empty value as absent.
+   *
+   * `??` alone is not enough here: docker-compose renders `${VAR:-}` for an unset variable as the
+   * *empty string*, which is not nullish, so `Number("") === 0` silently won. That turned an unset
+   * `SIGMAX_SLIPPAGE_BPS` into **zero slippage tolerance** — every authorization demanded the exact
+   * FTSO price, so the router rejected every swap with INSUFFICIENT_OUTPUT_AMOUNT and the vault
+   * reported `SwapFailed()`. The signal, the signature and the sizing were all correct; only the
+   * bound was impossible.
+   */
+  const str = (v: string | undefined, fallback: string): string =>
+    v !== undefined && v.trim() !== "" ? v.trim() : fallback;
+
   return {
-    rpcUrl: env.SIGMAX_RPC_URL ?? "https://coston2-api.flare.network/ext/C/rpc",
-    chainId: BigInt(env.SIGMAX_CHAIN_ID ?? "114"),
+    rpcUrl: str(env.SIGMAX_RPC_URL, "https://coston2-api.flare.network/ext/C/rpc"),
+    chainId: BigInt(str(env.SIGMAX_CHAIN_ID, "114")),
     subscriptionRegistry: addr(env.SIGMAX_SUBSCRIPTION_REGISTRY),
     vaultFactory: addr(env.SIGMAX_VAULT_FACTORY),
     router: addr(env.SIGMAX_ROUTER) ?? "0x8D29b61C41CF318d15d031BE2928F79630e068e6", // BlazeSwap
     ftsoV2: addr(env.SIGMAX_FTSO_V2) ?? "0xC4e9c78EA53db782E28f28Fdf80BaF59336B304d",
-    feedId: (env.SIGMAX_FEED_ID ?? "0x015852502f55534400000000000000000000000000") as `0x${string}`,
-    slippageBps: Number(env.SIGMAX_SLIPPAGE_BPS ?? "100"),
-    deadlineSecs: Number(env.SIGMAX_DEADLINE_SECS ?? "600"),
-    subsFromBlock: BigInt(env.SIGMAX_SUBS_FROM_BLOCK ?? "0"),
-    logWindow: BigInt(env.SIGMAX_LOG_WINDOW ?? "30"),
+    feedId: str(env.SIGMAX_FEED_ID, "0x015852502f55534400000000000000000000000000") as `0x${string}`,
+    slippageBps: Number(str(env.SIGMAX_SLIPPAGE_BPS, "100")),
+    deadlineSecs: Number(str(env.SIGMAX_DEADLINE_SECS, "600")),
+    subsFromBlock: BigInt(str(env.SIGMAX_SUBS_FROM_BLOCK, "0")),
+    logWindow: BigInt(str(env.SIGMAX_LOG_WINDOW, "30")),
   };
 }
 
@@ -95,6 +109,14 @@ export interface FollowerContext extends FollowerBalance {
  * In-enclave memory only: it holds public addresses, never any part of a signal.
  */
 const subscriberCache = new Map<string, { scannedTo: bigint; subscribers: Set<`0x${string}`> }>();
+
+/**
+ * Drop the cache. Wired into `resetSigmaxState()` so each test starts from a clean scan — otherwise
+ * one test's subscriber set leaks into the next and the tests stop testing what they claim to.
+ */
+export function resetSubscriberCache(): void {
+  subscriberCache.clear();
+}
 
 async function readSubscribers(
   client: PublicClient,

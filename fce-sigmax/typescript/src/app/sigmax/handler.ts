@@ -22,6 +22,7 @@ import {
   readDecimals,
   readFtsoPrice,
   invertScaledPrice,
+  resetSubscriberCache,
   type SigmaxChainConfig,
 } from "./chain.js";
 import { decryptViaNode } from "../node.js";
@@ -62,6 +63,7 @@ export function resetSigmaxState(): void {
   stats.signalsProcessed = 0;
   stats.signalsRejected = 0;
   stats.authsIssued = 0;
+  resetSubscriberCache();
 }
 
 /** UUID (16 bytes) left-aligned in a bytes32, matching a Solidity `bytes16 → bytes32` widening. */

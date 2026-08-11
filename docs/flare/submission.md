@@ -110,8 +110,26 @@ runs in simulated mode (`SIMULATED_TEE=true`, code hash `0x194844cf…`), reache
 simulated enclave mints a fresh identity on each start, the registered machine address changes across
 restarts — the one used for a given run is recorded with that run.
 
-## Demo
-`⟨video + Coston2 app link — pending the FCC round-trip + deploy⟩`
+## Demo — the full flow, executed live on Coston2 (2026-08-11)
+
+A leader published an **encrypted** signal; a follower's non-custodial vault executed the copied swap,
+with the TEE signature verified on-chain in between. Nothing mocked, no privileged shortcut.
+
+| Step | Evidence |
+|---|---|
+| Leader encrypts client-side + publishes ciphertext | tx [`0xa3b7603e…`](https://coston2-explorer.flare.network/tx/0xa3b7603e9a44b15809b6b932347bc9372f1f8588af56f96626037c6d4c441172) — only 753 bytes of ciphertext on-chain |
+| Enclave decrypts, sizes, returns a signed `SwapAuth[]` | action `0x674dc45e…`, status 1, in ~5 s |
+| Vault verifies the TEE signature and swaps | tx [`0xac6b2603…`](https://coston2-explorer.flare.network/tx/0xac6b2603117d9c79d6a321dcbc8e89f9f646a07252e2b119252e98def5ceff33) |
+| Result | vault `0x86a072E0…`: **0.500000 FXRP → 0.475000 FXRP + 0.025080 testUSD** |
+
+Run it yourself: `pnpm --filter @sigmax/agent exec tsx scripts/flare-e2e-demo.ts`. The script asserts
+mid-run that the take-profit and stop-loss cannot be recovered from the published bytes, so the
+confidentiality claim is checked rather than asserted.
+
+Extension for this run: id `0x…1024f` (66127) · sender `0x14D54C022A9c2321BAeba1478c46018e21609f26` ·
+TEE machine `0x736148d4fC26E9E259D80B268d435d823F7CF7C5`.
+
+`⟨video⟩`
 
 ## Repo
 https://github.com/AbdoViper23/Sigmax — branch `feat/flare-migration`.
