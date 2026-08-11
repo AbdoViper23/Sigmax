@@ -244,6 +244,9 @@ bash scripts/post-build.sh          # registers this machine → status PRODUCTI
 > invalidates the registered machine, so register once and leave it running — then point the vault at
 > the new identity with `setTeeAddress`. This surprised us; it is documented so it doesn't surprise you.
 
+> Every command, every service, and the failure modes with their fixes are in the
+> **[runbook](docs/flare/RUNBOOK.md)**.
+
 ### 3. Run the full flow
 
 ```bash
@@ -355,6 +358,6 @@ enclave → sign → verify on-chain → swap — with the transactions linked a
 
 Built for the **Flare Summer Signal** hackathon.
 
-**MIT** · [design docs](docs/flare/) · [submission](docs/flare/submission.md) · [findings log](docs/flare/reference/phase-0-findings.md)
+**MIT** · [runbook](docs/flare/RUNBOOK.md) · [design docs](docs/flare/) · [submission](docs/flare/submission.md) · [findings log](docs/flare/reference/phase-0-findings.md)
 
 </div>
