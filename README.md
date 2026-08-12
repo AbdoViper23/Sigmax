@@ -266,7 +266,20 @@ It creates a plan, subscribes a follower, funds a vault, encrypts a signal **in-
 only ciphertext, waits for the signed authorization, relays it, and prints the vault's resulting
 balances. The confidentiality assertion runs mid-flow.
 
-### 4. The web app
+### 4. The keeper — required for the Flare venue
+
+```bash
+pnpm --filter @sigmax/agent keeper
+```
+
+Without it the enclave signs an authorization that nobody delivers, and no trade happens. Nothing errors:
+the leader sees a published signal, the enclave logs a success, and the vaults are never called. This is
+the single easiest thing to forget, so it has its own step.
+
+The Hyperliquid venue needs no keeper — the enclave calls the exchange itself — but it does need its
+agent key injected after every restart (`scripts/hl-inject-key.ts`).
+
+### 5. The web app
 
 ```bash
 pnpm --filter @sigmax/web dev
@@ -355,7 +368,6 @@ enclave → sign → verify on-chain → swap — with the transactions linked a
   difference between "the design is sound" and "the guarantee is enforced by silicon". It is the next
   piece of work, not a detail.
 - Testnet only. No mainnet, no audit.
-- Take-profit / stop-loss monitoring is designed and specified but not part of this build.
 - **Hyperliquid is a second venue inside the same enclave** — the encrypted signal, the attested code,
   and the Coston2 control plane are shared; only settlement differs. It is fully tested offline (101
   extension tests, including byte-equality of the order signing against the reference SDK) but **has
@@ -364,12 +376,17 @@ enclave → sign → verify on-chain → swap — with the transactions linked a
   Note the guarantee is weaker there and deliberately stated as such: on Flare the *contract* enforces
   the caps, on Hyperliquid *attested code* does, because Hyperliquid has nothing on-chain to verify a
   TEE signature against.
-- The web app's Story-era hooks (`apps/web/src/hooks/{leader,leaders,follower,strategies,useStoryIp}.ts`)
-  are now orphaned — nothing imports them. They are left in place rather than deleted in this change.
-- **The currently deployed `CopyVaultFlareFactory` (`0xD274…`) predates the rotatable `teeAddress`** and
-  cannot follow a re-attested enclave. It needs one final redeploy. Withdraw from any funded vault
-  first: a redeploy moves `vaultOf` to a new contract, so old vaults keep their funds but the app stops
-  finding them. `flare-resync.ts` detects this case and says so rather than failing obscurely.
+- **Take-profit / stop-loss are decoded inside the enclave and never acted on** — on *either* venue. The
+  design is settled (a `tick` instruction, thresholds re-derived from the signal's on-chain ciphertext
+  rather than from enclave state, which does not survive a restart) but it is not built. This is the one
+  feature gap rather than a rough edge, and it is called out here because everything else in this list is
+  an operational caveat.
+- **The deployed contracts are older than this code and need one redeploy.** Verified by calling them:
+  `factory.admin()` and `registry.strategyCount()` both revert, so the live factory cannot follow a
+  re-attested enclave and the live registry cannot enumerate plans (which is what made the leaderboard
+  hang). `pnpm --filter @sigmax/agent deploy:flare` does the redeploy and rewrites all three env files;
+  it refuses to run while the old factory still holds funded vaults, because `vaultOf` does not migrate —
+  those vaults keep their funds but the app stops finding them.
 - The web app's Flare wiring is typechecked and builds, but has **not been clicked through against a
   live enclave** — the stack was down while it was written.
 - Some of the stack predates this hackathon; `docs/flare/submission.md` separates what was reused,
