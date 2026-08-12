@@ -203,40 +203,46 @@ async function main(): Promise<void> {
        * read the chain" produce the same reassuring output. A safety check that can silently pass is
        * worse than none, because it invites the destructive action it was meant to gate.
        */
+      /*
+       * Concurrency is 8, not 30, and failures are retried.
+       *
+       * The first version fanned out 30 windows at a time — the public RPC rate-limited it and 1,063 of
+       * 2,592 windows failed. Worse, an earlier version swallowed those failures and cheerfully reported
+       * "0 vaults, safe to replace", which is precisely the false pass this check exists to prevent. Go
+       * gentler and retry rather than going fast and guessing.
+       */
+      const readWindow = async (r: { fromBlock: bigint; toBlock: bigint }, attempt = 0): Promise<unknown[] | null> => {
+        try {
+          return await publicClient.getContractEvents({
+            address: oldFactory,
+            abi: OLD_FACTORY_ABI,
+            eventName: "VaultCreated",
+            fromBlock: r.fromBlock,
+            toBlock: r.toBlock,
+          });
+        } catch {
+          if (attempt >= 4) return null; // exhausted — the caller counts it
+          await new Promise((res) => setTimeout(res, 250 * 2 ** attempt));
+          return readWindow(r, attempt + 1);
+        }
+      };
+
       let failedWindows = 0;
-      const BATCH = 30;
+      const BATCH = 8;
       for (let i = 0; i < ranges.length; i += BATCH) {
-        const batches = await Promise.all(
-          ranges.slice(i, i + BATCH).map((r) =>
-            publicClient
-              .getContractEvents({
-                address: oldFactory,
-                abi: OLD_FACTORY_ABI,
-                eventName: "VaultCreated",
-                fromBlock: r.fromBlock,
-                toBlock: r.toBlock,
-              })
-              .catch(() => {
-                failedWindows += 1;
-                return [];
-              }),
-          ),
-        );
+        const batches = await Promise.all(ranges.slice(i, i + BATCH).map((r) => readWindow(r)));
         for (const logs of batches) {
-          for (const l of logs) {
-            const v = (l.args as { vault?: Address }).vault;
+          if (logs === null) {
+            failedWindows += 1;
+            continue;
+          }
+          for (const l of logs as { args?: { vault?: Address } }[]) {
+            const v = l.args?.vault;
             if (v) vaults.add(v);
           }
         }
       }
       dim(`scanned blocks ${fromBlock}–${head} (${ranges.length} windows) + ${direct.length} known owner(s)`);
-
-      if (failedWindows > 0) {
-        bad(`${failedWindows} of ${ranges.length} log windows failed — this audit is INCOMPLETE`);
-        dim("A vault created in a window that failed to read would not appear below. Re-run, or accept");
-        dim("the risk explicitly with FORCE=1 after checking balances yourself.");
-        if (!process.env.FORCE) process.exit(1);
-      }
 
       for (const vault of vaults) {
         const [fxrp, quote] = await Promise.all([
@@ -246,19 +252,42 @@ async function main(): Promise<void> {
         if (fxrp > 0n || quote > 0n) funded.push({ vault, fxrp, quote });
       }
 
-      if (funded.length === 0) {
-        ok(`old factory has ${vaults.size} vault(s), none funded — safe to replace`);
-      } else {
+      /*
+       * Report findings BEFORE complaining about coverage. An earlier version exited on the incomplete
+       * log scan first, which meant it withheld the funded vault it had ALREADY found via the exact
+       * `vaultOf` lookup — the operator was told "the audit is incomplete" and not "there is money in
+       * this vault", which is the fact that actually decides what to do next.
+       */
+      if (funded.length > 0) {
         bad(`${funded.length} vault(s) on the old factory still hold funds:`);
         for (const f of funded) {
           dim(`${f.vault}  ${formatUnits(f.fxrp, 6)} FXRP  ${formatUnits(f.quote, 6)} testUSD`);
         }
-        dim("Withdraw from each (the owner can, from the app or directly) before replacing the factory.");
+        dim("Withdraw from each first — the owner can, from the vault card or directly. Replacing the");
+        dim("factory does not take these funds, but the app looks vaults up on the NEW factory and will");
+        dim("report the owner as having none.");
+      } else {
+        ok(`old factory has ${vaults.size} vault(s), none funded`);
+      }
+
+      /*
+       * Coverage is reported as a separate, weaker signal. The public RPC rate-limits this scan pattern
+       * hard enough that insisting on 100% would make the tool unusable — but a partial scan must never
+       * be presented as a clean bill of health, so it downgrades the result rather than hiding it.
+       */
+      if (failedWindows > 0) {
+        const pct = (((ranges.length - failedWindows) / ranges.length) * 100).toFixed(1);
+        warn(`log coverage ${pct}% — ${failedWindows}/${ranges.length} windows failed even after retries`);
+        dim("The exact `vaultOf` checks above are unaffected. A vault belonging to an owner not in that");
+        dim("list, created inside a failed window, would be missed — re-run to improve coverage.");
+      }
+
+      if (funded.length > 0 || failedWindows > 0) {
         if (!process.env.FORCE) {
-          bad("refusing to proceed. Set FORCE=1 to override once you have accepted this.");
+          bad("refusing to proceed. Fix the above, or set FORCE=1 to accept it deliberately.");
           process.exit(1);
         }
-        warn("FORCE=1 — proceeding despite funded vaults on the old factory");
+        warn("FORCE=1 — proceeding anyway");
       }
     } catch (e) {
       warn(`could not audit the old factory: ${e instanceof Error ? e.message : String(e)}`);
