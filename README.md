@@ -61,21 +61,25 @@ The result is four properties at once, none traded against another:
 
 ## The run that proves it
 
-Not a mock, not a fork, not a privileged shortcut. Executed on Coston2 on **2026-08-11**:
+Not a mock, not a fork, not a privileged shortcut. Re-executed on Coston2 on **2026-08-12** against the
+current deployment and a freshly attested enclave identity:
 
 ```
-follower vault 0x86a072E0…
+follower vault 0xAD31372f…
 
   before   0.500000 FXRP    0.000000 testUSD
-  after    0.475000 FXRP    0.025080 testUSD
+  after    0.475000 FXRP    0.025234 testUSD
            └─ sold by a signal nobody outside the enclave could read
 ```
 
 | Step | On-chain evidence |
 |---|---|
-| **1.** Leader encrypts in-browser, publishes ciphertext | [`0xa3b7603e…`](https://coston2-explorer.flare.network/tx/0xa3b7603e9a44b15809b6b932347bc9372f1f8588af56f96626037c6d4c441172) — 753 bytes, no plaintext field |
-| **2.** Enclave decrypts, sizes per follower, signs a `SwapAuth[]` | action `0x674dc45e…`, status `1`, **~5 s** |
-| **3.** Vault verifies the TEE signature and swaps | [`0xac6b2603…`](https://coston2-explorer.flare.network/tx/0xac6b2603117d9c79d6a321dcbc8e89f9f646a07252e2b119252e98def5ceff33) |
+| **1.** Leader encrypts in-process, publishes ciphertext | [`0x659510c7…`](https://coston2-explorer.flare.network/tx/0x659510c76198ac0f4660ead11500e8c53b91ec6fd1a4f8ad644f3111a66e0009) — 753 bytes, no plaintext field |
+| **2.** Enclave decrypts, sizes per follower, signs a `SwapAuth[]` | action `0x51aace69…`, status `1` |
+| **3.** Vault verifies the TEE signature and swaps | [`0x4fe94de8…`](https://coston2-explorer.flare.network/tx/0x4fe94de8ce048383c48faa353be020b51bb37b13386ba65b37342d065b1e0695) — success, 314,145 gas |
+
+TEE identity for this run: `0xEc7C4CBcbA76f957F898577a6b4712d64c619Ebd` (status `PRODUCTION`, extension
+`66127`). The earlier 2026-08-11 run used the previous deployment and a since-retired identity.
 
 The demo script **asserts mid-run** that the take-profit and stop-loss cannot be recovered from the
 published bytes. The confidentiality claim is tested, not asserted.
@@ -387,12 +391,13 @@ enclave → sign → verify on-chain → swap — with the transactions linked a
   re-attested enclave and made the leaderboard hang. Redeploying is one command
   (`pnpm --filter @sigmax/agent deploy:flare`), and it refuses to run while the old factory holds funded
   vaults, because `vaultOf` does not migrate.
-- **The enclave is not running, so nothing has been exercised live**: no signal published through the UI,
-  no keeper relay, and none of the Hyperliquid path. `factory.teeAddress()` still points at the previous
-  TEE identity; the factory is rotatable now, so `resync` corrects it in one transaction once an enclave
-  is up. Starting one unattended was avoided on purpose — a restart mints a new identity, and a process
-  that does not outlive its session would leave a dead machine registered, which causes intermittent
-  silent routing failures. See §0a of the [runbook](docs/flare/RUNBOOK.md).
+- **A stale TEE identity is still registered.** The extension has two `PRODUCTION` machines on the same
+  URL, so each dispatch picks one at random; the run above was routed correctly first try, but that is
+  luck. The scaffold ships no pause command, so retiring it needs a call it does not wrap. `resync` flags
+  this loudly — see §0a of the [runbook](docs/flare/RUNBOOK.md).
+- **Hyperliquid is configured but unexercised.** The per-trade cap is set, but the enclave reads env only
+  at boot and a restart would mint a new identity — costing the working Flare setup. It also needs a
+  funded exchange testnet account, which is the one prerequisite no amount of code supplies.
 - The web app's contract reads are verified against the live chain (`listPlans` returns the seeded plan),
   but the app has **not been clicked through end to end** — that needs a running enclave.
 - Some of the stack predates this hackathon; `docs/flare/submission.md` separates what was reused,

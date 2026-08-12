@@ -32,17 +32,48 @@ The previous vault (`0x86a072E0…`, from the 2026-08-11 run) was **drained to i
 FXRP and 0.02508 testUSD — because `vaultOf` does not migrate to a new factory. The transactions from
 that run remain valid evidence; the vault is simply empty now.
 
-**Not done — needs a session that outlives a single command:**
+**Also done — the full path was re-run live on 2026-08-12:**
 
-The enclave is **not running**, so nothing has been exercised live: no signal published through the UI,
-no keeper relay, and none of the Hyperliquid path. `factory.teeAddress()` is currently the *previous*
-identity `0xBe8E238d…1BaB`, which is deliberate — the factory is rotatable now, so `resync` fixes it in
-one transaction once a real enclave is up.
+| | |
+|---|---|
+| Enclave | up; TEE id `0xEc7C4CBcbA76f957F898577a6b4712d64c619Ebd`, `PRODUCTION`, extension `66127` |
+| `factory.teeAddress()` | rotated to the live identity (tx `0xf6306744…`) |
+| Vault | repointed to the live identity (tx `0x511a2548…`) |
+| Signal | published as 753 bytes of ciphertext (tx `0x659510c7…`) |
+| Enclave result | status `1`, TEE-signed `SwapAuth[]` (action `0x51aace69…`) |
+| Keeper relay | success, 314,145 gas (tx `0x4fe94de8…`) |
+| Vault after | 0.475 FXRP + 0.025234 testUSD |
+| Keeper daemon | running, watching from block 33977665 |
 
-> Starting the enclave was deliberately **not** attempted unattended. A restart mints a new TEE identity,
-> and an enclave whose process does not outlive the session would leave a dead machine registered — which
-> per the delivery rules below causes intermittent, silent routing failures for whoever runs it next.
-> Bring it up in a session you control, then follow §0 in order.
+### The `SwapFailed()` that took two runs to clear
+
+The first attempt reverted with `SwapFailed()` and the cause is worth recording, because nothing in the
+confidential path was wrong — steps 1–5 all succeeded and the enclave returned a valid signature.
+
+The FXRP/testUSD pool held ~8 units a side and its implied price was **0.66% below** the FTSO feed.
+Selling 0.025 FXRP, the pool would return 0.024926 testUSD while the FTSO-bounded `minOut` at 1%
+slippage demanded 0.024993 — short by 0.27%. The oracle/pool gap plus the 0.3% AMM fee plus price impact
+consumed the entire 1% budget.
+
+Fixed by **rebalancing the pool toward the oracle** (a 0.05 testUSD buy lifted the implied price from
+1.00314 to 1.01554), not by widening the slippage bound — that bound is the safety property, and raising
+it to paper over a mispriced pool would have traded away the guarantee to make a demo pass. On thin
+liquidity, budget for fee + impact on top of the oracle gap or nothing ever executes.
+
+**Not done — two items, for different reasons:**
+
+1. **The stale identity `0x736148d4…` is still registered `PRODUCTION`**, so the extension now has TWO
+   active machines on the same URL and every dispatch picks one at random. The live run above was routed
+   correctly on the first attempt, but that is luck, not design. There is **no pause command in the
+   scaffold** (`register-tee` exposes only `r`/`R`/`a`/`p`, and the tooling has no status setter), so this
+   needs either a call the scaffold does not wrap or a word with the FCC team. `resync` flags it loudly.
+
+2. **The Hyperliquid venue is configured but not exercised.** `SIGMAX_HL_PER_TRADE_CAP` is now set
+   ($15/trade), but the enclave reads its env once at boot, so it needs a restart to pick it up — and a
+   restart mints a new identity, costing the working Flare setup above. Deliberately not done: the trade
+   is a working venue for an unproven one, because Hyperliquid execution *also* needs a funded testnet
+   account and a follower `approveAgent`, and funding an exchange account is the one thing here I cannot
+   do at all. Do the restart and the injection together, then re-run `resync`.
 
 ---
 
@@ -85,9 +116,9 @@ so nothing retries on your behalf. For an instruction to arrive, the selected ma
 
 | Requirement | How to check | Verified for us |
 |---|---|---|
-| Status `2` = PRODUCTION | `getTeeMachineStatus(teeId)` | ✅ `0x736148d4…` = 2, but see the note below |
-| An availability check **< ~6h old** | no public getter — a machine idle overnight stops receiving | ⚠️ stale (last live 2026-08-11) |
-| A registered `teeId` | `getActiveTeeMachines(extensionId)` | ✅ one machine, ext `66127` |
+| Status `2` = PRODUCTION | `getTeeMachineStatus(teeId)` | ✅ live id `0xEc7C4CBc…` = 2 |
+| An availability check **< ~6h old** | no public getter — a machine idle overnight stops receiving | ✅ fresh (registered 2026-08-12) |
+| A registered `teeId` | `getActiveTeeMachines(extensionId)` | ⚠️ **two** active on ext `66127` — see §0a |
 | A **stable public HTTPS** URL | it is stored on-chain, so a changing URL keeps receiving nothing | ✅ reserved ngrok domain |
 
 `pnpm --filter @sigmax/agent resync` now audits the first, third and fourth and prints where to look.
@@ -97,9 +128,8 @@ beside a live one produces intermittent, apparently random silence. Old machines
 themselves, and every restart leaves another behind.
 
 > This is what `flare-e2e-demo.ts` papers over by republishing up to 20 times until it happens to be
-> routed to the live machine. The real fix is to **pause the stale identity**. Right now we have exactly
-> one machine registered, so the retry loop is not currently hiding anything — but it will be after the
-> next restart if the old identity is not paused.
+> routed to the live machine. The real fix is to **pause the stale identity** — and as of the 2026-08-12
+> run there ARE two active, so that retry loop is now load-bearing rather than precautionary.
 
 **A restart always creates a new TEE identity** — the key is not persisted in simulated *or* production
 mode, and there is no supported way to restore an old `teeId`. So the recovery order is fixed:
