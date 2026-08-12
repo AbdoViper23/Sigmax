@@ -4,6 +4,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { TxButton } from "./TxButton";
+import { cn } from "@/lib/utils";
+import type { VaultLeg } from "@/hooks/flareControlPlane";
 import { AlertTriangle, Ban, ExternalLink, ShieldCheck, Wallet } from "lucide-react";
 
 export interface VaultCardProps {
@@ -14,15 +16,23 @@ export interface VaultCardProps {
   quoteSymbol: string;
   /** FXRP in the follower's own wallet — the ceiling on what they can fund. */
   walletFxrp: string;
+  /** The follower's quote-token balance — what an ENTRY signal spends. */
+  walletQuote: string;
   explorerBase: string;
   busy?: boolean;
   /** True when this vault still trusts a retired enclave identity — every trade would revert. */
   teeStale?: boolean;
-  onCreateAndFund: (amount: string) => Promise<void>;
-  onDeposit: (amount: string) => Promise<void>;
-  onWithdraw: (amount: string) => Promise<void>;
+  onCreateAndFund: (amount: string, leg: VaultLeg) => Promise<void>;
+  onDeposit: (amount: string, leg: VaultLeg) => Promise<void>;
+  onWithdraw: (amount: string, leg: VaultLeg) => Promise<void>;
   onRepointTee?: () => Promise<void>;
+  /** Top up the quote token from its public faucet (Coston2 has no other source). */
+  onMintQuote?: () => Promise<void>;
 }
+
+// `VaultLeg` is defined by the hook that owns the leg→token mapping, and re-exported here so callers
+// of this card do not need to import from two places.
+export type { VaultLeg };
 
 /**
  * The follower's vault — create it, fund it, take the money back out.
@@ -38,6 +48,7 @@ export function VaultCard({
   quote,
   quoteSymbol,
   walletFxrp,
+  walletQuote,
   explorerBase,
   busy,
   teeStale,
@@ -45,10 +56,24 @@ export function VaultCard({
   onDeposit,
   onWithdraw,
   onRepointTee,
+  onMintQuote,
 }: VaultCardProps) {
   const [amount, setAmount] = useState("");
+  /*
+   * Which leg to fund. This exists because the two directions spend different tokens: an ENTRY buys
+   * FXRP with the quote token, an EXIT sells FXRP back. A vault holding only FXRP therefore sizes every
+   * ENTRY at zero and skips it — the follower sees no trade and no error, which is the worst possible
+   * outcome. Funding both legs is the only way to be able to copy a leader's next signal whichever
+   * direction it is.
+   */
+  const [leg, setLeg] = useState<VaultLeg>("fxrp");
+
   const exists = Boolean(vault);
-  const canFund = Number(walletFxrp) > 0;
+  const walletBalance = leg === "fxrp" ? walletFxrp : walletQuote;
+  const symbol = leg === "fxrp" ? "FXRP" : quoteSymbol;
+  const canFund = Number(walletBalance) > 0;
+  // Both legs funded ⇒ ready for a signal in either direction.
+  const readyBothWays = Number(fxrp) > 0 && Number(quote) > 0;
 
   return (
     <Card>
@@ -119,8 +144,39 @@ export function VaultCard({
           </div>
         )}
 
+        {/* Fund both sides to copy either direction. Stated as guidance rather than left implicit,
+            because the failure it prevents is invisible: an under-funded leg is skipped, not reported. */}
+        {exists && !readyBothWays && (
+          <p className="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+            Hold <span className="font-medium text-foreground">both</span> FXRP and {quoteSymbol} to copy
+            in either direction — buys spend {quoteSymbol}, sells spend FXRP. A leg with no balance is
+            skipped silently.
+          </p>
+        )}
+
         <div className="space-y-2">
-          <Label htmlFor="vault-amount">Amount (FXRP)</Label>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <Label htmlFor="vault-amount">Amount</Label>
+            <div role="radiogroup" aria-label="Token" className="inline-flex rounded-md border border-border p-0.5">
+              {(["fxrp", "quote"] as const).map((l) => (
+                <button
+                  key={l}
+                  type="button"
+                  role="radio"
+                  aria-checked={leg === l}
+                  onClick={() => setLeg(l)}
+                  className={cn(
+                    "rounded-sm px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                    leg === l
+                      ? "bg-foreground text-background"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {l === "fxrp" ? "FXRP" : quoteSymbol}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="flex gap-2">
             <Input
               id="vault-amount"
@@ -129,41 +185,49 @@ export function VaultCard({
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
             />
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setAmount(exists ? walletFxrp : walletFxrp)}
-            >
+            <Button type="button" variant="outline" onClick={() => setAmount(walletBalance)}>
               Max
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground">
-            {canFund ? `${walletFxrp} FXRP in your wallet` : "No FXRP in your wallet yet"}
-          </p>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+            <span>
+              {canFund ? `${walletBalance} ${symbol} in your wallet` : `No ${symbol} in your wallet yet`}
+            </span>
+            {leg === "quote" && onMintQuote && (
+              <button
+                type="button"
+                onClick={onMintQuote}
+                disabled={busy}
+                className="font-medium text-primary underline-offset-2 hover:underline disabled:opacity-50"
+              >
+                Get {quoteSymbol} from the faucet
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="flex flex-wrap gap-2">
           {exists ? (
             <>
               <TxButton
-                label="Deposit"
+                label={`Deposit ${symbol}`}
                 pendingLabel="Depositing…"
                 disabled={busy || !amount}
-                onClick={() => onDeposit(amount).then(() => setAmount(""))}
+                onClick={() => onDeposit(amount, leg).then(() => setAmount(""))}
               />
               <TxButton
                 label="Withdraw"
                 pendingLabel="Withdrawing…"
                 disabled={busy || !amount}
-                onClick={() => onWithdraw(amount).then(() => setAmount(""))}
+                onClick={() => onWithdraw(amount, leg).then(() => setAmount(""))}
               />
             </>
           ) : (
             <TxButton
-              label="Create vault & fund"
+              label={`Create vault & fund ${symbol}`}
               pendingLabel="Creating…"
               disabled={busy || !amount || !canFund}
-              onClick={() => onCreateAndFund(amount).then(() => setAmount(""))}
+              onClick={() => onCreateAndFund(amount, leg).then(() => setAmount(""))}
             />
           )}
         </div>

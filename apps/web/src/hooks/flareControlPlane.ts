@@ -41,6 +41,19 @@ export function parseToken(v: string): bigint {
   return parseUnits((v || "0") as `${number}`, TOKEN_DECIMALS);
 }
 
+/**
+ * Which side of the pair an action targets.
+ *
+ * Both legs matter, and getting this wrong is invisible: the enclave sizes an ENTRY against the QUOTE
+ * balance (it buys FXRP with testUSD) and an EXIT against FXRP. A vault holding only one of them has
+ * every signal in the other direction sized to zero and skipped — no trade, no error. Funding was
+ * FXRP-only before, so the publish form's default action could never execute.
+ */
+export type VaultLeg = "fxrp" | "quote";
+
+const tokenForLeg = (leg: VaultLeg = "fxrp"): Address =>
+  leg === "fxrp" ? env.fxrp : env.flareQuoteToken;
+
 /** The token/router set every vault is created with — FXRP↔testUSD through BlazeSwap. */
 function vaultCreationArgs(cap: bigint) {
   return [[env.fxrp, env.flareQuoteToken], [env.blazeSwapRouter], cap] as const;
@@ -678,20 +691,21 @@ export function useFlareVault() {
    * follower had to understand before they could do the thing they came for.
    */
   const createAndFund = useMutation({
-    mutationFn: async (v: { fxrpAmount: string; capAmount?: string }): Promise<void> => {
+    mutationFn: async (v: { amount: string; leg?: VaultLeg; capAmount?: string }): Promise<void> => {
       if (!client || !address || !env.flareVaultFactory) throw new Error("vault factory is not configured");
-      const amount = parseToken(v.fxrpAmount);
+      const amount = parseToken(v.amount);
       if (amount === 0n) throw new Error("enter an amount to fund");
       const cap = v.capAmount ? parseToken(v.capAmount) : DEFAULT_CAP;
+      const token = tokenForLeg(v.leg);
 
       // The factory pulls the tokens straight through to the new vault; it never holds a balance.
-      await ensureAllowance(env.fxrp, env.flareVaultFactory, amount);
+      await ensureAllowance(token, env.flareVaultFactory, amount);
 
       const hash = await writeContractAsync({
         address: env.flareVaultFactory,
         abi: COPY_VAULT_FLARE_FACTORY_ABI,
         functionName: "createVaultAndDeposit",
-        args: [...vaultCreationArgs(cap), env.fxrp, amount],
+        args: [...vaultCreationArgs(cap), token, amount],
         chainId: FLARE,
       });
       await client.waitForTransactionReceipt({ hash });
@@ -701,10 +715,10 @@ export function useFlareVault() {
 
   /** Top up an existing vault. */
   const deposit = useMutation({
-    mutationFn: async (v: { token?: Address; amount: string }): Promise<void> => {
+    mutationFn: async (v: { leg?: VaultLeg; amount: string }): Promise<void> => {
       const vault = state.data?.vault;
       if (!client || !vault) throw new Error("create a vault first");
-      const token = v.token ?? env.fxrp;
+      const token = tokenForLeg(v.leg);
       const amount = parseToken(v.amount);
       if (amount === 0n) throw new Error("enter an amount to deposit");
 
@@ -723,14 +737,14 @@ export function useFlareVault() {
 
   /** Withdraw to the owner's wallet. Only the owner can call this — enforced in the contract. */
   const withdraw = useMutation({
-    mutationFn: async (v: { token?: Address; amount: string }): Promise<void> => {
+    mutationFn: async (v: { leg?: VaultLeg; amount: string }): Promise<void> => {
       const vault = state.data?.vault;
       if (!client || !vault) throw new Error("no vault to withdraw from");
       const hash = await writeContractAsync({
         address: vault,
         abi: COPY_VAULT_FLARE_ABI,
         functionName: "withdraw",
-        args: [v.token ?? env.fxrp, parseToken(v.amount)],
+        args: [tokenForLeg(v.leg), parseToken(v.amount)],
         chainId: FLARE,
       });
       await client.waitForTransactionReceipt({ hash });
