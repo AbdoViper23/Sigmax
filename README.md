@@ -11,7 +11,7 @@
 **The strategy never leaks — the track record stays verifiable on-chain.**
 
 [![Network](https://img.shields.io/badge/Flare-Coston2%20(114)-e62058)](https://coston2-explorer.flare.network)
-[![Tests](https://img.shields.io/badge/tests-298%20passing-2ea043)](#tests)
+[![Tests](https://img.shields.io/badge/tests-304%20passing-2ea043)](#tests)
 [![Live](https://img.shields.io/badge/end--to--end-executed%20on--chain-2ea043)](#the-run-that-proves-it)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
@@ -229,7 +229,7 @@ build — the Flare path does not import them, and the web app does not depend o
 pnpm install
 pnpm -r test                          # 128 TypeScript tests
 cd fce-sigmax/typescript && npm test  # 102 extension tests (standalone npm project)
-cd packages/contracts && forge test   # 68 contract tests (needs its own foundry.toml)
+cd packages/contracts && forge test   # 74 contract tests (needs its own foundry.toml)
 ```
 
 ### 2. Bring up the enclave

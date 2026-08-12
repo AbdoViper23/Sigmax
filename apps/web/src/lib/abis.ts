@@ -24,6 +24,10 @@ export const COPY_VAULT_FACTORY_ABI = parseAbi([
 ]);
 
 export const SUBSCRIPTION_REGISTRY_ABI = parseAbi([
+  // Enumeration — the leaderboard's data source. Two eth_calls instead of scanning PlanCreated across
+  // the whole chain, which the public Coston2 RPC makes impossible (it caps eth_getLogs at 30 blocks).
+  "function strategyCount() view returns (uint256)",
+  "function listPlans(uint256 start, uint256 limit) view returns (address[] ids, (address leader, address payToken, uint256 monthlyPrice, uint16 platformFeeBps, bool active)[] found)",
   "function isActive(address subscriber, address strategyId) view returns (bool)",
   "function expiryOf(address subscriber, address strategyId) view returns (uint64)",
   "function subscribe(address strategyId)",

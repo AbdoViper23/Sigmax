@@ -8,7 +8,7 @@ import { PositionsTable } from "@/components/sigmax/PositionsTable";
 import { NetworkSwitchPrompt } from "@/components/sigmax/NetworkSwitchPrompt";
 import { flareConfigReady, env } from "@/lib/env";
 import { useNetwork } from "@/hooks/useNetwork";
-import { useFlareLeader, useFlareSubscription } from "@/hooks/flareControlPlane";
+import { useFlareLeader, useFlareLeaderStats, useFlareSubscription } from "@/hooks/flareControlPlane";
 import { getPublishedSignals, signalProofs } from "@/lib/publishedSignals";
 import { mockLeaderPositions } from "@/lib/mock";
 import type { Leader } from "@/lib/leaders";
@@ -41,6 +41,16 @@ function StrategyPage() {
 function StrategyDetail({ leader, id }: { leader: Leader; id: string }) {
   const net = useNetwork();
   const sub = useFlareSubscription(id as Hex);
+  /*
+   * The roster (`listPlans`) carries no labels or metrics — those need log history, and folding them
+   * into the roster read is what made the leaderboard hang. So they load here, per strategy, and the
+   * page renders immediately with the truncated id until they arrive.
+   */
+  const { stats } = useFlareLeaderStats(leader.flaggedForTesting ? undefined : id);
+  const displayName = stats?.displayName || leader.displayName;
+  const username = stats?.username || leader.username;
+  const performance = stats?.performance ?? leader.performance;
+  const subscribers = stats?.subscribers ?? leader.subscribers;
 
   /**
    * The publish history this browser recorded. It is deliberately thin: there is no on-chain
@@ -63,14 +73,14 @@ function StrategyDetail({ leader, id }: { leader: Leader; id: string }) {
       onSwitch={() => net.switchTo("flare")}
     >
       <SubscribeCard
-        strategyName={leader.displayName}
+        strategyName={displayName}
         monthlyPriceWip={price}
         status={sub.active ? "active" : "idle"}
         activeUntil={sub.expiresAt > 0 ? new Date(sub.expiresAt * 1000).toISOString() : undefined}
         pendingLabel="Subscribing…"
         onSubscribe={async () => {
           await sub.subscribe();
-          toast.success(`You're now copying ${leader.displayName}`);
+          toast.success(`You're now copying ${displayName}`);
         }}
       />
     </NetworkSwitchPrompt>
@@ -87,13 +97,13 @@ function StrategyDetail({ leader, id }: { leader: Leader; id: string }) {
   return (
     <main className="mx-auto max-w-6xl px-4 py-10">
       <StrategyHeader
-        name={leader.displayName}
-        username={leader.username}
+        name={displayName}
+        username={username}
         bio={leader.bio}
-        verifiedReturnPct={leader.performance.verifiedReturnPct}
-        winRatePct={leader.performance.winRatePct}
-        maxDrawdownPct={leader.performance.maxDrawdownPct}
-        subscribers={leader.subscribers}
+        verifiedReturnPct={performance.verifiedReturnPct}
+        winRatePct={performance.winRatePct}
+        maxDrawdownPct={performance.maxDrawdownPct}
+        subscribers={subscribers}
         publishedSignals={publishedSignals}
         flaggedForTesting={leader.flaggedForTesting}
       />

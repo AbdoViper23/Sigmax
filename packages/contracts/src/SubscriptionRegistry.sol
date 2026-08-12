@@ -45,9 +45,22 @@ contract SubscriptionRegistry is ReentrancyGuard {
     /// @notice strategyId => subscriber => subscription record.
     mapping(address => mapping(address => Sub)) public subs;
 
+    /**
+     * @notice Every strategyId with a plan, in creation order. Append-only.
+     *
+     * @dev Exists so a client can list leaders with two `eth_call`s instead of scanning `PlanCreated`.
+     *      That scan is not merely slower — on a mapping-only registry it is the ONLY way to enumerate,
+     *      and the public Coston2 RPC caps `eth_getLogs` at 30 blocks. Covering the chain since deploy
+     *      therefore takes thousands of sequential requests from a browser, which in practice means the
+     *      leaderboard spins and then renders nothing. Enumeration turns an unbounded scan into a
+     *      length read plus a slice, and costs one `sstore` per plan ever created.
+     */
+    address[] public strategyIds;
+
     /// @dev `username`/`displayName` are off-chain-style profile labels surfaced ONLY in this event
-    ///      (not stored in `Plan`, so plan reads stay cheap). Clients discover leaders by scanning
-    ///      `PlanCreated` and read the labels from the log. Not enforced unique on-chain.
+    ///      (not stored in `Plan`, so plan reads stay cheap). Clients read the labels from the log for
+    ///      a specific strategy once they have the id — a targeted, single-topic filter rather than a
+    ///      full-history scan. Not enforced unique on-chain.
     event PlanCreated(
         address indexed strategyId,
         address indexed leader,
@@ -109,8 +122,45 @@ contract SubscriptionRegistry is ReentrancyGuard {
             platformFeeBps: platformFeeBps,
             active: true
         });
+        // Safe to append unconditionally: the PlanExists guard above means this line runs at most once
+        // per strategyId, so the array can never contain a duplicate.
+        strategyIds.push(strategyId);
 
         emit PlanCreated(strategyId, msg.sender, payToken, monthlyPrice, platformFeeBps, username, displayName);
+    }
+
+    /// @notice How many strategies have ever registered a plan.
+    function strategyCount() external view returns (uint256) {
+        return strategyIds.length;
+    }
+
+    /**
+     * @notice A page of strategy ids with their plans — the leaderboard's entire data source.
+     * @dev Paged rather than all-at-once so the call cannot grow past the node's response or gas limits
+     *      as the registry fills up. `start` beyond the end returns empty arrays instead of reverting,
+     *      so a client can page until it gets a short result without first reading the count.
+     * @param start Index to read from.
+     * @param limit Maximum entries to return.
+     */
+    function listPlans(uint256 start, uint256 limit)
+        external
+        view
+        returns (address[] memory ids, Plan[] memory found)
+    {
+        uint256 total = strategyIds.length;
+        if (start >= total) return (new address[](0), new Plan[](0));
+
+        uint256 end = start + limit;
+        if (end > total) end = total;
+        uint256 n = end - start;
+
+        ids = new address[](n);
+        found = new Plan[](n);
+        for (uint256 i = 0; i < n; i++) {
+            address id = strategyIds[start + i];
+            ids[i] = id;
+            found[i] = plans[id];
+        }
     }
 
     /// @notice Pause or resume new subscriptions for a strategy. Does not affect existing subs.

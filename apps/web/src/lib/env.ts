@@ -43,6 +43,15 @@ export const env = {
   flareTeeVerifier: asAddr(E.VITE_FLARE_TEE_VERIFIER),
   /** Public URL of the FCC ext-proxy; the browser reads the enclave's ECIES key from its /info. */
   flareProxyUrl: E.VITE_FLARE_PROXY_URL?.replace(/\/$/, ""),
+  /**
+   * Block to start every log scan from — the control plane's deploy block.
+   *
+   * `fromBlock: "earliest"` is not a slow version of this, it is a broken one: the public Coston2 RPC
+   * caps `eth_getLogs` at 30 blocks, so a request spanning ~34M blocks is rejected outright, and the
+   * rejection used to be swallowed by a catch that left the leaderboard empty. Mirrors
+   * `SIGMAX_SUBS_FROM_BLOCK` in fce-sigmax/.env — keep the two in step after a redeploy.
+   */
+  flareFromBlock: BigInt(E.VITE_FLARE_FROM_BLOCK ?? "33898193"),
 
   // Fixed Coston2 infrastructure (verified on-chain).
   fxrp: asAddr(E.VITE_FXRP_ADDRESS) ?? (COSTON2_ADDRESSES.fxrp as Hex),
@@ -76,6 +85,14 @@ export const env = {
   // agent HTTP endpoint for publishing signals (CDR encryption is server-only; see hooks/leader.ts).
   // When unset, the leader's Publish Signal stays mock so the page still works without the agent.
   agentApiUrl: E.VITE_AGENT_API_URL?.replace(/\/$/, ""),
+
+  /**
+   * Append the seeded demo leaders to the marketplace. On by default because a fresh deployment has no
+   * plans, so without them the leaderboard, the sorting, and the track-record views cannot be seen at
+   * all. Every seeded leader renders a "Test" badge and a dashed border, so they are never mistaken for
+   * a verified record — set false before a real launch.
+   */
+  showDemoLeaders: (E.VITE_SHOW_DEMO_LEADERS ?? "true").toLowerCase() !== "false",
 
   // platform fee (bps) used by SubscriptionRegistry.createPlan; 15% default, matches the FE display.
   platformFeeBps: Number(E.VITE_PLATFORM_FEE_BPS ?? "1500"),
