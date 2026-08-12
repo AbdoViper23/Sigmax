@@ -22,6 +22,7 @@ import {
   SUBSCRIPTION_REGISTRY_ABI,
   TEST_USD_ABI,
 } from "@/lib/abis";
+import { mockLeaders, testLeaders } from "@/lib/mock";
 import type { Leader, LeaderPerformance } from "@/lib/leaders";
 
 const FLARE = env.flareChainId;
@@ -95,127 +96,217 @@ function fifoStats(swapsByVault: Swap[][], quote: string): LeaderPerformance {
 }
 
 /**
- * Every leader, discovered entirely from Coston2: `PlanCreated` for the roster and price,
- * `Subscribed` for the subscriber set, and those subscribers' vaults' `Swapped` events for the track
- * record. No indexer, no off-chain roster.
+ * Every leader, from two `eth_call`s.
+ *
+ * WHAT THIS USED TO DO, AND WHY IT WAS UNUSABLE: it scanned `PlanCreated`, `Subscribed` and
+ * `VaultCreated` from `earliest`, then one `Swapped` scan per subscriber vault. The public Coston2 RPC
+ * caps `eth_getLogs` at 30 blocks, so "since deploy" is thousands of sequential requests from a
+ * browser — the page span for a long time and then rendered nothing, because the rejected ranges were
+ * swallowed by the catch. Slowness was the symptom; using logs for enumeration was the cause.
+ *
+ * `SubscriptionRegistry.listPlans` now returns the roster directly. The subscriber count and the track
+ * record — the two things that genuinely need history — are loaded SEPARATELY per leader, so the list
+ * paints from the first response instead of waiting on every leader's trade history.
  */
+const PAGE = 50;
+
 export function useFlareLeaders(): { leaders: Leader[]; loading: boolean } {
   const client = usePublicClient({ chainId: FLARE });
 
   const q = useQuery({
-    queryKey: ["flare-leaders", env.flareSubscriptionRegistry, env.flareVaultFactory],
-    enabled: Boolean(client && env.flareSubscriptionRegistry && env.flareVaultFactory),
-    staleTime: 30_000,
+    queryKey: ["flare-leaders", env.flareSubscriptionRegistry],
+    enabled: Boolean(client && env.flareSubscriptionRegistry),
+    // The roster changes only when someone registers, so it is worth holding for a while; a stale
+    // list is far better than a blank one while it refetches.
+    staleTime: 5 * 60_000,
     queryFn: async (): Promise<Leader[]> => {
-      if (!client || !env.flareSubscriptionRegistry || !env.flareVaultFactory) return [];
-      const quote = env.flareQuoteToken.toLowerCase();
-
-      const [planLogs, subLogs] = await Promise.all([
-        client.getContractEvents({
-          address: env.flareSubscriptionRegistry,
-          abi: SUBSCRIPTION_REGISTRY_ABI,
-          eventName: "PlanCreated",
-          fromBlock: "earliest",
-          toBlock: "latest",
-        }),
-        client.getContractEvents({
-          address: env.flareSubscriptionRegistry,
-          abi: SUBSCRIPTION_REGISTRY_ABI,
-          eventName: "Subscribed",
-          fromBlock: "earliest",
-          toBlock: "latest",
-        }),
-      ]);
-
-      const subsByStrategy = new Map<string, Set<string>>();
-      for (const l of subLogs) {
-        const { strategyId, subscriber } = l.args as { strategyId?: string; subscriber?: string };
-        if (!strategyId || !subscriber) continue;
-        const key = strategyId.toLowerCase();
-        const set = subsByStrategy.get(key) ?? new Set<string>();
-        set.add(subscriber.toLowerCase());
-        subsByStrategy.set(key, set);
-      }
-
-      // owner → vault, so a subscriber's trades can be found without an extra call each.
-      const vaultByOwner = new Map<string, Address>();
-      try {
-        const vaultLogs = await client.getContractEvents({
-          address: env.flareVaultFactory,
-          abi: COPY_VAULT_FLARE_FACTORY_ABI,
-          eventName: "VaultCreated",
-          fromBlock: "earliest",
-          toBlock: "latest",
-        });
-        for (const l of vaultLogs) {
-          const { owner, vault } = l.args as { owner?: Address; vault?: Address };
-          if (owner && vault) vaultByOwner.set(owner.toLowerCase(), vault);
-        }
-      } catch {
-        // No vaults yet, or the range was rejected — leaders still list, just without trade metrics.
-      }
-
-      const swapsCache = new Map<string, Swap[]>();
-      const vaultSwaps = async (vault: Address): Promise<Swap[]> => {
-        const key = vault.toLowerCase();
-        const cached = swapsCache.get(key);
-        if (cached) return cached;
-        let swaps: Swap[] = [];
-        try {
-          const logs = await client.getContractEvents({
-            address: vault,
-            abi: COPY_VAULT_FLARE_ABI,
-            eventName: "Swapped",
-            fromBlock: "earliest",
-            toBlock: "latest",
-          });
-          swaps = logs.map((l) => l.args as Swap);
-        } catch {
-          // one unreadable vault must not sink the whole leaderboard
-        }
-        swapsCache.set(key, swaps);
-        return swaps;
-      };
+      if (!client || !env.flareSubscriptionRegistry) return [];
 
       const leaders: Leader[] = [];
-      for (const p of planLogs) {
-        const { strategyId, leader, monthlyPrice, username, displayName } = p.args as {
-          strategyId?: Address;
-          leader?: Address;
-          monthlyPrice?: bigint;
-          username?: string;
-          displayName?: string;
-        };
-        if (!strategyId || !leader) continue;
+      // Page until short. No count read first — `listPlans` clamps rather than reverting past the end.
+      for (let start = 0; ; start += PAGE) {
+        const [ids, plans] = await client.readContract({
+          address: env.flareSubscriptionRegistry,
+          abi: SUBSCRIPTION_REGISTRY_ABI,
+          functionName: "listPlans",
+          args: [BigInt(start), BigInt(PAGE)],
+        });
 
-        const subs = subsByStrategy.get(strategyId.toLowerCase()) ?? new Set<string>();
-        const swapsByVault: Swap[][] = [];
-        for (const sub of subs) {
-          const vault = vaultByOwner.get(sub);
-          if (vault) swapsByVault.push(await vaultSwaps(vault));
+        for (const [i, id] of ids.entries()) {
+          const plan = plans[i];
+          if (!plan || plan.leader === zeroAddress) continue;
+          leaders.push({
+            id,
+            leaderAddress: plan.leader,
+            // The registry stores no labels (they live only in the PlanCreated log, to keep plan reads
+            // cheap). Showing a truncated id beats blocking the whole list on a log lookup per leader;
+            // the strategy page fetches the real label with a single indexed filter.
+            username: id.slice(2, 10).toLowerCase(),
+            displayName: `Strategy ${id.slice(0, 6)}…${id.slice(-4)}`,
+            monthlyPriceWip: formatToken(plan.monthlyPrice),
+            // Filled in by useFlareLeaderStats, which runs per leader and does not block this list.
+            performance: {
+              verifiedReturnPct: null,
+              winRatePct: null,
+              maxDrawdownPct: null,
+              closedTrades: 0,
+            },
+            subscribers: 0,
+          });
         }
 
-        leaders.push({
-          id: strategyId,
-          leaderAddress: leader,
-          username: username || strategyId.slice(0, 8),
-          displayName: displayName || `Strategy ${strategyId.slice(0, 6)}…`,
-          monthlyPriceWip: formatToken(monthlyPrice ?? 0n),
-          performance: fifoStats(swapsByVault, quote),
-          subscribers: subs.size,
-        });
+        if (ids.length < PAGE) break;
       }
       return leaders;
     },
   });
 
-  return { leaders: q.data ?? [], loading: q.isLoading };
+  /*
+   * Seeded leaders, appended.
+   *
+   * A fresh deployment has no plans, so the marketplace renders an empty state and none of the card,
+   * sorting, or track-record UI can be seen or judged. These fixtures fill that gap and every one
+   * carries `flaggedForTesting`, which renders a "Test" badge, dashes the card border, and skips the
+   * on-chain stats fetch — so they are visibly demo data at a glance and are never presented as a
+   * verified record. Turn them off with `VITE_SHOW_DEMO_LEADERS=false` before a real launch.
+   */
+  const demo = env.showDemoLeaders ? testLeaders : [];
+
+  // Unconfigured (or SSR): show the full mock roster so the page always has something to render.
+  if (!flareConfigReady) {
+    return { leaders: [...mockLeaders, ...demo], loading: false };
+  }
+
+  /*
+   * `loading` means "there is nothing to show yet" — not "a request is in flight". The seeded leaders are
+   * available synchronously, so reporting loading while they exist made the page render skeletons for
+   * content it already had, on every visit and through every refetch. This is the difference between the
+   * list appearing instantly and appearing to hang.
+   */
+  const onChain = q.data ?? [];
+  return {
+    leaders: [...onChain, ...demo],
+    loading: q.isLoading && onChain.length === 0 && demo.length === 0,
+  };
 }
 
 /** One leader by strategy id (route param). */
 export function useFlareLeader(id: string): { leader: Leader | undefined; loading: boolean } {
   const { leaders, loading } = useFlareLeaders();
   return { leader: leaders.find((l) => l.id.toLowerCase() === id.toLowerCase()), loading };
+}
+
+/**
+ * Subscriber count, on-chain labels and track record for ONE strategy — loaded after the roster.
+ *
+ * Kept out of `useFlareLeaders` deliberately. These need log history, and history is the expensive part;
+ * folding them into the list query meant nothing rendered until every leader's trades had been read.
+ * Now the list appears immediately and each card fills in.
+ *
+ * Every scan here is bounded by `flareFromBlock` (the registry's deploy block) and filtered to one
+ * indexed `strategyId`, so it is a narrow query rather than a full-history sweep — and any rejection
+ * degrades to "no metrics yet" instead of an empty leaderboard.
+ */
+export function useFlareLeaderStats(strategyId: string | undefined) {
+  const client = usePublicClient({ chainId: FLARE });
+
+  const q = useQuery({
+    queryKey: ["flare-leader-stats", strategyId],
+    enabled: Boolean(client && strategyId && env.flareSubscriptionRegistry),
+    staleTime: 2 * 60_000,
+    queryFn: async () => {
+      const empty = {
+        subscribers: 0,
+        username: undefined as string | undefined,
+        displayName: undefined as string | undefined,
+        performance: {
+          verifiedReturnPct: null,
+          winRatePct: null,
+          maxDrawdownPct: null,
+          closedTrades: 0,
+        } as LeaderPerformance,
+      };
+      if (!client || !strategyId || !env.flareSubscriptionRegistry) return empty;
+      const fromBlock = env.flareFromBlock;
+
+      // Labels + subscribers: both single-strategy filters on the registry, run together.
+      const [planLogs, subLogs] = await Promise.all([
+        client
+          .getContractEvents({
+            address: env.flareSubscriptionRegistry,
+            abi: SUBSCRIPTION_REGISTRY_ABI,
+            eventName: "PlanCreated",
+            args: { strategyId: strategyId as Hex },
+            fromBlock,
+            toBlock: "latest",
+          })
+          .catch(() => []),
+        client
+          .getContractEvents({
+            address: env.flareSubscriptionRegistry,
+            abi: SUBSCRIPTION_REGISTRY_ABI,
+            eventName: "Subscribed",
+            args: { strategyId: strategyId as Hex },
+            fromBlock,
+            toBlock: "latest",
+          })
+          .catch(() => []),
+      ]);
+
+      const labels = planLogs[0]?.args as { username?: string; displayName?: string } | undefined;
+      const subscribers = new Set<string>();
+      for (const l of subLogs) {
+        const s = (l.args as { subscriber?: string }).subscriber;
+        if (s) subscribers.add(s.toLowerCase());
+      }
+
+      // Track record, if the vaults are readable. Capped: the point is a representative figure on a
+      // card, and an unbounded fan-out here would reintroduce exactly the stall this split removed.
+      const quote = env.flareQuoteToken.toLowerCase();
+      const swapsByVault: Swap[][] = [];
+      if (env.flareVaultFactory) {
+        const owners = [...subscribers].slice(0, 10);
+        const vaults = await Promise.all(
+          owners.map((owner) =>
+            client
+              .readContract({
+                address: env.flareVaultFactory!,
+                abi: COPY_VAULT_FLARE_FACTORY_ABI,
+                functionName: "vaultOf",
+                args: [owner as Hex],
+              })
+              .catch(() => zeroAddress),
+          ),
+        );
+        const scans = await Promise.all(
+          vaults
+            .filter((v) => v !== zeroAddress)
+            .map((vault) =>
+              client
+                .getContractEvents({
+                  address: vault,
+                  abi: COPY_VAULT_FLARE_ABI,
+                  eventName: "Swapped",
+                  fromBlock,
+                  toBlock: "latest",
+                })
+                .then((logs) => logs.map((l) => l.args as Swap))
+                .catch(() => [] as Swap[]),
+            ),
+        );
+        swapsByVault.push(...scans);
+      }
+
+      return {
+        subscribers: subscribers.size,
+        username: labels?.username || undefined,
+        displayName: labels?.displayName || undefined,
+        performance: fifoStats(swapsByVault, quote),
+      };
+    },
+  });
+
+  return { stats: q.data, loading: q.isLoading };
 }
 
 // ---------------------------------------------------------------- leader: the plan
@@ -754,13 +845,17 @@ export function useFlareVaultTrades(vault: Address | undefined) {
     refetchInterval: 20_000,
     queryFn: async () => {
       if (!client || !vault) return [];
-      const logs = await client.getContractEvents({
-        address: vault,
-        abi: COPY_VAULT_FLARE_ABI,
-        eventName: "Swapped",
-        fromBlock: "earliest",
-        toBlock: "latest",
-      });
+      // Bounded like every other scan: `earliest` here is rejected outright by the public RPC's
+      // 30-block getLogs cap, which showed up as a permanently empty trade list rather than an error.
+      const logs = await client
+        .getContractEvents({
+          address: vault,
+          abi: COPY_VAULT_FLARE_ABI,
+          eventName: "Swapped",
+          fromBlock: env.flareFromBlock,
+          toBlock: "latest",
+        })
+        .catch(() => []);
       const quote = env.flareQuoteToken.toLowerCase();
       return logs.map((l, i) => {
         const a = l.args as Swap;

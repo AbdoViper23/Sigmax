@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { TestBadge } from "./TestBadge";
 import { cn } from "@/lib/utils";
-import { useFlareSubscription } from "@/hooks/flareControlPlane";
+import { useFlareLeaderStats, useFlareSubscription } from "@/hooks/flareControlPlane";
 import type { Leader } from "@/lib/leaders";
 
 /** Monogram seeded from the leader handle — same square-badge idiom as the Nav logo. */
@@ -35,7 +35,23 @@ function Stat({ label, value, className }: { label: string; value: string; class
 }
 
 export function LeaderCard({ leader }: { leader: Leader }) {
-  const ret = leader.performance.verifiedReturnPct;
+  /*
+   * Each card fetches its OWN metrics. The roster arrives from a single `listPlans` call with placeholder
+   * stats, and every card then fills itself in — so one leader with a long trade history can no longer
+   * hold up the whole grid, which is what made this page appear to hang.
+   *
+   * Seeded demo leaders carry their numbers inline and are skipped, since there is nothing on-chain to
+   * read for them.
+   */
+  const { stats } = useFlareLeaderStats(leader.flaggedForTesting ? undefined : leader.id);
+
+  const performance = stats?.performance ?? leader.performance;
+  const subscribers = stats?.subscribers ?? leader.subscribers;
+  // On-chain labels live in the PlanCreated log, so they arrive with the stats rather than the roster.
+  const displayName = stats?.displayName || leader.displayName;
+  const username = stats?.username || leader.username;
+
+  const ret = performance.verifiedReturnPct;
   const test = leader.flaggedForTesting;
   return (
     <Card
@@ -47,10 +63,10 @@ export function LeaderCard({ leader }: { leader: Leader }) {
       <CardContent className="flex flex-1 flex-col gap-4 pt-6">
         {/* Identity */}
         <div className="flex items-start gap-3">
-          <Monogram seed={leader.username} />
+          <Monogram seed={username} />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
-              <h3 className="truncate font-semibold tracking-tight">{leader.displayName}</h3>
+              <h3 className="truncate font-semibold tracking-tight">{displayName}</h3>
               {test ? (
                 <TestBadge withIcon={false} className="shrink-0" />
               ) : (
@@ -60,7 +76,7 @@ export function LeaderCard({ leader }: { leader: Leader }) {
                 />
               )}
             </div>
-            <p className="truncate text-xs text-muted-foreground">@{leader.username}</p>
+            <p className="truncate text-xs text-muted-foreground">@{username}</p>
           </div>
           <span className="shrink-0 rounded-full border border-border bg-muted/40 px-2.5 py-1 font-mono text-xs tabular-nums">
             {leader.monthlyPriceWip} WIP<span className="text-muted-foreground">/mo</span>
@@ -78,12 +94,12 @@ export function LeaderCard({ leader }: { leader: Leader }) {
               ret === null ? "text-muted-foreground" : ret >= 0 ? "text-success" : "text-danger"
             }
           />
-          <Stat label="Win rate" value={pct(leader.performance.winRatePct)} />
+          <Stat label="Win rate" value={pct(performance.winRatePct)} />
           <div>
             <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Subs</div>
             <div className="mt-0.5 flex items-center gap-1 font-mono text-lg tabular-nums">
               <Users className="h-3.5 w-3.5 text-muted-foreground" />
-              {leader.subscribers}
+              {subscribers}
             </div>
           </div>
         </div>

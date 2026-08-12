@@ -209,3 +209,94 @@ contract SubscriptionRegistryTest is Test {
         assertTrue(registry.isActive(follower, strategyId), "active again after re-subscribe");
     }
 }
+
+/**
+ * Plan enumeration.
+ *
+ * The leaderboard's load time is the reason this exists. With only `mapping(address => Plan)`, listing
+ * leaders means scanning `PlanCreated` from the deploy block — and the public Coston2 RPC caps
+ * `eth_getLogs` at 30 blocks, so that is thousands of sequential requests from a browser. These tests
+ * pin the array's two load-bearing properties: it never duplicates, and paging never reverts.
+ */
+contract SubscriptionRegistryEnumerationTest is Test {
+    SubscriptionRegistry internal reg;
+    ERC20Mock internal pay;
+    address internal treasury = makeAddr("treasury");
+    address internal leaderA = makeAddr("leaderA");
+    address internal leaderB = makeAddr("leaderB");
+    address internal stratA = makeAddr("stratA");
+    address internal stratB = makeAddr("stratB");
+
+    function setUp() public {
+        reg = new SubscriptionRegistry(treasury);
+        pay = new ERC20Mock();
+    }
+
+    function _create(address leader, address strategyId, uint256 price) internal {
+        vm.prank(leader);
+        reg.createPlan(strategyId, address(pay), price, 1500, "u", "d");
+    }
+
+    function test_countStartsAtZero() public view {
+        assertEq(reg.strategyCount(), 0);
+    }
+
+    function test_createPlanAppendsInOrder() public {
+        _create(leaderA, stratA, 1e6);
+        _create(leaderB, stratB, 2e6);
+
+        assertEq(reg.strategyCount(), 2, "both recorded");
+        assertEq(reg.strategyIds(0), stratA, "creation order preserved");
+        assertEq(reg.strategyIds(1), stratB);
+    }
+
+    /// A duplicate would make the leaderboard show the same leader twice.
+    function test_cannotAppendTheSameStrategyTwice() public {
+        _create(leaderA, stratA, 1e6);
+
+        vm.prank(leaderB);
+        vm.expectRevert(SubscriptionRegistry.PlanExists.selector);
+        reg.createPlan(stratA, address(pay), 5e6, 1500, "u", "d");
+
+        assertEq(reg.strategyCount(), 1, "no duplicate appended");
+    }
+
+    function test_listPlansReturnsIdsWithTheirPlans() public {
+        _create(leaderA, stratA, 1e6);
+        _create(leaderB, stratB, 2e6);
+
+        (address[] memory ids, SubscriptionRegistry.Plan[] memory found) = reg.listPlans(0, 10);
+
+        assertEq(ids.length, 2, "both returned");
+        assertEq(ids[0], stratA);
+        assertEq(found[0].leader, leaderA, "plan travels with its id");
+        assertEq(found[0].monthlyPrice, 1e6);
+        assertEq(ids[1], stratB);
+        assertEq(found[1].leader, leaderB);
+        assertEq(found[1].monthlyPrice, 2e6);
+    }
+
+    function test_listPlansPages() public {
+        _create(leaderA, stratA, 1e6);
+        _create(leaderB, stratB, 2e6);
+
+        (address[] memory first,) = reg.listPlans(0, 1);
+        assertEq(first.length, 1, "limit respected");
+        assertEq(first[0], stratA);
+
+        (address[] memory second,) = reg.listPlans(1, 1);
+        assertEq(second[0], stratB, "second page continues");
+    }
+
+    /// A client pages until it gets a short result; that must not require reading the count first.
+    function test_listPlansClampsAndDoesNotRevertPastTheEnd() public {
+        _create(leaderA, stratA, 1e6);
+
+        (address[] memory clamped,) = reg.listPlans(0, 100);
+        assertEq(clamped.length, 1, "limit clamped to length");
+
+        (address[] memory past, SubscriptionRegistry.Plan[] memory pastPlans) = reg.listPlans(5, 10);
+        assertEq(past.length, 0, "past the end is empty, not a revert");
+        assertEq(pastPlans.length, 0);
+    }
+}
