@@ -48,6 +48,9 @@ export const SUBSCRIPTION_REGISTRY_ABI = parseAbi([
 export const COPY_VAULT_FLARE_ABI = parseAbi([
   "function deposit(address token, uint256 amount)",
   "function withdraw(address token, uint256 amount)",
+  // Owner-only. The follower's escape hatch when the enclave re-attests under a new identity: without
+  // it their vault would keep trusting a retired key and reject every authorization.
+  "function setTeeAddress(address teeAddress)",
   "function owner() view returns (address)",
   "function perTradeCap() view returns (uint256)",
   "function paused() view returns (bool)",

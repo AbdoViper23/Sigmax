@@ -5,15 +5,26 @@ import { ShieldCheck, Ban, CheckCircle2 } from "lucide-react";
 export interface AuthorizeAgentCardProps {
   approved: boolean;
   loading?: boolean;
+  /**
+   * The address being authorized, derived in the follower's own browser from the enclave's published
+   * key. Shown because the whole point is that they can check it rather than take our word for it.
+   */
+  agentAddress?: string;
   onAuthorize: () => Promise<void>;
 }
 
 /**
  * "Authorize copy-trading" — the follower signs a wallet message that lets the strategy place trades
- * for them. Deliberately abstracted: no Hyperliquid jargon. The key reassurance (and the truth) is
- * that this permission can place trades but can NEVER withdraw funds, and is revocable anytime.
+ * for them on the off-chain venue. Deliberately abstracted: no Hyperliquid jargon. The key reassurance
+ * (and the truth) is that this permission can place trades but can NEVER withdraw funds — the exchange
+ * itself rejects a withdrawal signed by an agent key — and it is revocable at any time.
  */
-export function AuthorizeAgentCard({ approved, loading, onAuthorize }: AuthorizeAgentCardProps) {
+export function AuthorizeAgentCard({
+  approved,
+  loading,
+  agentAddress,
+  onAuthorize,
+}: AuthorizeAgentCardProps) {
   return (
     <Card>
       <CardHeader>
@@ -39,6 +50,19 @@ export function AuthorizeAgentCard({ approved, loading, onAuthorize }: Authorize
           </li>
         </ul>
 
+        {agentAddress && (
+          <div className="rounded-md border border-border bg-muted/30 p-3">
+            <div className="text-xs uppercase tracking-wide text-muted-foreground">
+              Address being authorized
+            </div>
+            <div className="mt-1 break-all font-mono text-xs">{agentAddress}</div>
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              Computed in this browser from the enclave's published key and your own address — yours
+              alone, and not shared with any other follower.
+            </p>
+          </div>
+        )}
+
         {approved ? (
           <div className="inline-flex items-center gap-2 rounded-md border border-success/30 bg-success/5 px-3 py-2 text-sm text-success">
             <CheckCircle2 className="h-4 w-4" /> Copy-trading authorized
@@ -47,7 +71,7 @@ export function AuthorizeAgentCard({ approved, loading, onAuthorize }: Authorize
           <TxButton
             label="Authorize"
             pendingLabel="Waiting for signature…"
-            disabled={loading}
+            disabled={loading || !agentAddress}
             onClick={onAuthorize}
           />
         )}

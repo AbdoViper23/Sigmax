@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { TxButton } from "./TxButton";
-import { Ban, ExternalLink, ShieldCheck, Wallet } from "lucide-react";
+import { AlertTriangle, Ban, ExternalLink, ShieldCheck, Wallet } from "lucide-react";
 
 export interface VaultCardProps {
   /** The follower's vault address, or undefined when they have not created one yet. */
@@ -16,9 +16,12 @@ export interface VaultCardProps {
   walletFxrp: string;
   explorerBase: string;
   busy?: boolean;
+  /** True when this vault still trusts a retired enclave identity — every trade would revert. */
+  teeStale?: boolean;
   onCreateAndFund: (amount: string) => Promise<void>;
   onDeposit: (amount: string) => Promise<void>;
   onWithdraw: (amount: string) => Promise<void>;
+  onRepointTee?: () => Promise<void>;
 }
 
 /**
@@ -37,9 +40,11 @@ export function VaultCard({
   walletFxrp,
   explorerBase,
   busy,
+  teeStale,
   onCreateAndFund,
   onDeposit,
   onWithdraw,
+  onRepointTee,
 }: VaultCardProps) {
   const [amount, setAmount] = useState("");
   const exists = Boolean(vault);
@@ -75,6 +80,29 @@ export function VaultCard({
             </span>
           </li>
         </ul>
+
+        {/* The failure this prevents is a silent one: a re-attested enclave signs with a new key, the
+            vault keeps checking the old one, and every trade reverts with no visible cause. */}
+        {exists && teeStale && onRepointTee && (
+          <div className="space-y-2 rounded-md border border-warning/30 bg-warning/5 p-3">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden />
+              <div className="text-sm">
+                <p className="font-medium text-foreground">This vault trusts a retired enclave key.</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Trades will be rejected until you point it at the current one. Your funds are not
+                  affected, and only you can make this change.
+                </p>
+              </div>
+            </div>
+            <TxButton
+              label="Trust the current enclave"
+              pendingLabel="Updating…"
+              disabled={busy}
+              onClick={onRepointTee}
+            />
+          </div>
+        )}
 
         {exists && (
           <div className="grid grid-cols-2 gap-4 rounded-md border border-border bg-muted/30 p-3">

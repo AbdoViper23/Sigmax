@@ -11,7 +11,7 @@
 **The strategy never leaks — the track record stays verifiable on-chain.**
 
 [![Network](https://img.shields.io/badge/Flare-Coston2%20(114)-e62058)](https://coston2-explorer.flare.network)
-[![Tests](https://img.shields.io/badge/tests-267%20passing-2ea043)](#tests)
+[![Tests](https://img.shields.io/badge/tests-298%20passing-2ea043)](#tests)
 [![Live](https://img.shields.io/badge/end--to--end-executed%20on--chain-2ea043)](#the-run-that-proves-it)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
@@ -227,9 +227,9 @@ build — the Flare path does not import them, and the web app does not depend o
 
 ```bash
 pnpm install
-pnpm -r test                          # 106 TypeScript tests
-cd fce-sigmax/typescript && npm test  # 101 extension tests (standalone npm project)
-cd packages/contracts && forge test   # 60 contract tests (needs its own foundry.toml)
+pnpm -r test                          # 128 TypeScript tests
+cd fce-sigmax/typescript && npm test  # 102 extension tests (standalone npm project)
+cd packages/contracts && forge test   # 68 contract tests (needs its own foundry.toml)
 ```
 
 ### 2. Bring up the enclave
@@ -241,9 +241,17 @@ bash scripts/start-services.sh      # tee-node + proxy
 bash scripts/post-build.sh          # registers this machine → status PRODUCTION
 ```
 
-> ⚠️ **A simulated enclave mints a fresh signing key on every start.** Restarting the stack
-> invalidates the registered machine, so register once and leave it running — then point the vault at
-> the new identity with `setTeeAddress`. This surprised us; it is documented so it doesn't surprise you.
+> ⚠️ **A simulated enclave mints a fresh signing key on every start**, so after any restart every vault
+> is checking a retired key and *every swap reverts with `BadTeeSignature`* — correct signatures,
+> correct relaying, silent failure. One command finds and fixes that drift:
+>
+> ```bash
+> APPLY=1 pnpm --filter @sigmax/agent exec tsx scripts/flare-resync.ts
+> ```
+>
+> It compares the live enclave identity against the factory and your vault, rotates them, reports which
+> env values are stale, and checks whether the Hyperliquid key needs re-injecting. Run it read-only
+> first (drop `APPLY=1`). The follower-facing version of the same repair is a button on the vault card.
 
 > Every command, every service, and the failure modes with their fixes are in the
 > **[runbook](docs/flare/RUNBOOK.md)**.
@@ -358,6 +366,12 @@ enclave → sign → verify on-chain → swap — with the transactions linked a
   TEE signature against.
 - The web app's Story-era hooks (`apps/web/src/hooks/{leader,leaders,follower,strategies,useStoryIp}.ts`)
   are now orphaned — nothing imports them. They are left in place rather than deleted in this change.
+- **The currently deployed `CopyVaultFlareFactory` (`0xD274…`) predates the rotatable `teeAddress`** and
+  cannot follow a re-attested enclave. It needs one final redeploy. Withdraw from any funded vault
+  first: a redeploy moves `vaultOf` to a new contract, so old vaults keep their funds but the app stops
+  finding them. `flare-resync.ts` detects this case and says so rather than failing obscurely.
+- The web app's Flare wiring is typechecked and builds, but has **not been clicked through against a
+  live enclave** — the stack was down while it was written.
 - Some of the stack predates this hackathon; `docs/flare/submission.md` separates what was reused,
   ported, and written new.
 

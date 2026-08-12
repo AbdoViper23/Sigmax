@@ -466,7 +466,32 @@ export interface FlareVaultState {
   quote: bigint;
   perTradeCap: bigint;
   paused: boolean;
+  /** The TEE identity this vault verifies authorizations against. */
+  teeAddress: Address | undefined;
+  /** The identity the factory currently stamps into new vaults — i.e. the live enclave. */
+  factoryTeeAddress: Address | undefined;
+  /**
+   * True when this vault trusts a RETIRED enclave identity.
+   *
+   * A simulated enclave re-keys on every restart, so this is not an edge case — it is the normal state
+   * after the stack is restarted, and the symptom is every trade silently reverting with
+   * `BadTeeSignature`. Surfacing it as a repairable condition beats letting the follower conclude the
+   * product is broken.
+   */
+  teeStale: boolean;
 }
+
+const EMPTY_VAULT: FlareVaultState = {
+  vault: undefined,
+  exists: false,
+  fxrp: 0n,
+  quote: 0n,
+  perTradeCap: 0n,
+  paused: false,
+  teeAddress: undefined,
+  factoryTeeAddress: undefined,
+  teeStale: false,
+};
 
 /**
  * The follower's vault: read its state, create-and-fund it in one signature, top it up, withdraw.
@@ -486,15 +511,13 @@ export function useFlareVault() {
     enabled: Boolean(client && address && env.flareVaultFactory),
     refetchInterval: 15_000,
     queryFn: async (): Promise<FlareVaultState> => {
-      const empty: FlareVaultState = {
-        vault: undefined,
-        exists: false,
-        fxrp: 0n,
-        quote: 0n,
-        perTradeCap: 0n,
-        paused: false,
-      };
-      if (!client || !address || !env.flareVaultFactory) return empty;
+      if (!client || !address || !env.flareVaultFactory) return EMPTY_VAULT;
+
+      const factoryTeeAddress = await client.readContract({
+        address: env.flareVaultFactory,
+        abi: COPY_VAULT_FLARE_FACTORY_ABI,
+        functionName: "teeAddress",
+      });
 
       const vault = await client.readContract({
         address: env.flareVaultFactory,
@@ -502,9 +525,9 @@ export function useFlareVault() {
         functionName: "vaultOf",
         args: [address],
       });
-      if (vault === zeroAddress) return empty;
+      if (vault === zeroAddress) return { ...EMPTY_VAULT, factoryTeeAddress };
 
-      const [fxrp, quote, perTradeCap, paused] = await Promise.all([
+      const [fxrp, quote, perTradeCap, paused, teeAddress] = await Promise.all([
         client.readContract({ address: env.fxrp, abi: ERC20_ABI, functionName: "balanceOf", args: [vault] }),
         client.readContract({
           address: env.flareQuoteToken,
@@ -514,9 +537,22 @@ export function useFlareVault() {
         }),
         client.readContract({ address: vault, abi: COPY_VAULT_FLARE_ABI, functionName: "perTradeCap" }),
         client.readContract({ address: vault, abi: COPY_VAULT_FLARE_ABI, functionName: "paused" }),
+        client.readContract({ address: vault, abi: COPY_VAULT_FLARE_ABI, functionName: "teeAddress" }),
       ]);
 
-      return { vault, exists: true, fxrp, quote, perTradeCap, paused };
+      return {
+        vault,
+        exists: true,
+        fxrp,
+        quote,
+        perTradeCap,
+        paused,
+        teeAddress,
+        factoryTeeAddress,
+        teeStale:
+          factoryTeeAddress !== zeroAddress &&
+          teeAddress.toLowerCase() !== factoryTeeAddress.toLowerCase(),
+      };
     },
   });
 
@@ -611,15 +647,33 @@ export function useFlareVault() {
     },
   });
 
+  /**
+   * Repoint the vault at the enclave identity the factory currently advertises.
+   *
+   * Owner-only in the contract, which is the point: nobody — not the platform, not the factory admin —
+   * can change what an existing vault trusts. The follower chooses to follow a re-attested enclave.
+   */
+  const repointTee = useMutation({
+    mutationFn: async (): Promise<void> => {
+      const vault = state.data?.vault;
+      const target = state.data?.factoryTeeAddress;
+      if (!client || !vault) throw new Error("no vault to repoint");
+      if (!target || target === zeroAddress) throw new Error("the factory has no TEE address set");
+
+      const hash = await writeContractAsync({
+        address: vault,
+        abi: COPY_VAULT_FLARE_ABI,
+        functionName: "setTeeAddress",
+        args: [target],
+        chainId: FLARE,
+      });
+      await client.waitForTransactionReceipt({ hash });
+      await refresh();
+    },
+  });
+
   return {
-    ...(state.data ?? {
-      vault: undefined,
-      exists: false,
-      fxrp: 0n,
-      quote: 0n,
-      perTradeCap: 0n,
-      paused: false,
-    }),
+    ...(state.data ?? EMPTY_VAULT),
     loading: state.isLoading,
     ready: flareConfigReady,
     createAndFund: createAndFund.mutateAsync,
@@ -628,6 +682,8 @@ export function useFlareVault() {
     depositing: deposit.isPending,
     withdraw: withdraw.mutateAsync,
     withdrawing: withdraw.isPending,
+    repointTee: repointTee.mutateAsync,
+    repointing: repointTee.isPending,
     refresh,
   };
 }
