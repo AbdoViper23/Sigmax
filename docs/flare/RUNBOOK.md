@@ -5,6 +5,52 @@ Verified against the repo on 2026-08-11. Paths are relative to the repo root
 
 ---
 
+## 0. PRE-SUBMIT — what must be running for a trade to actually happen
+
+Both venues share the encrypted signal, the enclave, and the Coston2 control plane. They differ in what
+carries the trade the last hop, and that difference is where things silently do nothing.
+
+| | Flare | Hyperliquid |
+|---|---|---|
+| Who executes | a **keeper** relays the TEE-signed `SwapAuth[]`; the vault verifies it | the **enclave itself** calls the exchange API |
+| Extra process needed | **yes — the keeper** | no |
+| Needs a key injected | no | **yes, after every restart** |
+| Follower's setup | create + fund a vault (**both legs**) | `approveAgent` to their derived agent address |
+
+```bash
+# 1. Enclave up and registered
+cd fce-sigmax && bash scripts/start-services.sh && bash scripts/post-build.sh
+
+# 2. Fix TEE-identity drift + report stale env (read-only without APPLY=1)
+APPLY=1 pnpm --filter @sigmax/agent resync
+
+# 3. FLARE VENUE: the keeper must be running, or a published signal produces a signed
+#    authorization that nobody delivers — no trade, and every component reports success.
+pnpm --filter @sigmax/agent keeper
+
+# 4. HYPERLIQUID VENUE only
+pnpm --filter @sigmax/agent exec tsx scripts/hl-inject-key.ts
+#    ...and set SIGMAX_HL_PER_TRADE_CAP — it defaults to 0, which disables the venue by design
+
+# 5. Web app
+pnpm --filter web dev
+```
+
+### The two failures that produce no error message
+
+1. **No keeper running.** The enclave signs, the proxy files the result, and nothing relays it. After
+   publishing, the keeper's log should show `saw instruction …` within a few seconds.
+2. **A vault funded on only one leg.** The enclave sizes an ENTRY against the **quote** balance (it buys
+   FXRP with testUSD) and an EXIT against **FXRP**. A vault holding only one token skips every signal in
+   the other direction as zero-sized — no trade, no error. The vault card funds either leg and warns
+   until both are held.
+
+Also: `SIGMAX_SUBS_FROM_BLOCK` (enclave) and `VITE_FLARE_FROM_BLOCK` (web) must both point at the
+registry's deploy block. `earliest` is not a slower setting — the public RPC caps `eth_getLogs` at 30
+blocks and rejects the request outright.
+
+---
+
 ## 1. The moving parts
 
 Five things run. Only three of them are servers.

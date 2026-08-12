@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { SubscriptionStatusBadge } from "@/components/sigmax/SubscriptionStatusBadge";
 import { PositionsTable } from "@/components/sigmax/PositionsTable";
-import { VaultCard } from "@/components/sigmax/VaultCard";
+import { VaultCard, type VaultLeg } from "@/components/sigmax/VaultCard";
 import { AuthorizeAgentCard } from "@/components/sigmax/AuthorizeAgentCard";
 import { NetworkSwitchPrompt } from "@/components/sigmax/NetworkSwitchPrompt";
 import { VenueSummary, VENUE_META, type BadgeVenue } from "@/components/sigmax/VenueBadge";
@@ -54,6 +54,9 @@ export const Route = createFileRoute("/follower")({
 });
 
 const QUOTE_SYMBOL = "testUSD";
+
+/** Human label for whichever leg a vault action targets. */
+const legLabel = (leg: VaultLeg) => (leg === "fxrp" ? "FXRP" : QUOTE_SYMBOL);
 
 function DashboardPage() {
   const { isConnected } = useAccount();
@@ -242,23 +245,28 @@ function DashboardLive() {
             quote={formatToken(vault.quote)}
             quoteSymbol={QUOTE_SYMBOL}
             walletFxrp={formatToken(wallet.fxrp)}
+            walletQuote={formatToken(wallet.quote)}
             explorerBase={env.explorers.flare}
             busy={vault.creating || vault.depositing || vault.withdrawing || vault.repointing}
             teeStale={vault.teeStale}
-            onCreateAndFund={async (amount) => {
-              await vault.createAndFund({ fxrpAmount: amount });
+            onCreateAndFund={async (amount, leg) => {
+              await vault.createAndFund({ amount, leg });
               await wallet.refresh();
-              toast.success(`Vault created and funded with ${amount} FXRP`);
+              toast.success(`Vault created and funded with ${amount} ${legLabel(leg)}`);
             }}
-            onDeposit={async (amount) => {
-              await vault.deposit({ amount });
+            onDeposit={async (amount, leg) => {
+              await vault.deposit({ amount, leg });
               await wallet.refresh();
-              toast.success(`Deposited ${amount} FXRP`);
+              toast.success(`Deposited ${amount} ${legLabel(leg)}`);
             }}
-            onWithdraw={async (amount) => {
-              await vault.withdraw({ amount });
+            onWithdraw={async (amount, leg) => {
+              await vault.withdraw({ amount, leg });
               await wallet.refresh();
-              toast.success(`Withdrew ${amount} FXRP`);
+              toast.success(`Withdrew ${amount} ${legLabel(leg)}`);
+            }}
+            onMintQuote={async () => {
+              await wallet.mintQuote();
+              toast.success(`${QUOTE_SYMBOL} minted from the faucet`);
             }}
             onRepointTee={async () => {
               await vault.repointTee();

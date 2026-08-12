@@ -13,7 +13,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "poc": "tsx scripts/poc-agent.ts",
-    "start": "tsx --env-file=.env src/main.ts"
+    "start": "tsx --env-file=.env src/main.ts",
+    "keeper": "tsx --env-file=.env scripts/flare-keeper.ts",
+    "resync": "tsx --env-file=.env scripts/flare-resync.ts"
   },
   "dependencies": {
     "@nktkas/hyperliquid": "^0.32.2",
