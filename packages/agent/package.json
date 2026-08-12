@@ -15,7 +15,8 @@
     "poc": "tsx scripts/poc-agent.ts",
     "start": "tsx --env-file=.env src/main.ts",
     "keeper": "tsx --env-file=.env scripts/flare-keeper.ts",
-    "resync": "tsx --env-file=.env scripts/flare-resync.ts"
+    "resync": "tsx --env-file=.env scripts/flare-resync.ts",
+    "deploy:flare": "tsx --env-file=.env scripts/flare-deploy.ts"
   },
   "dependencies": {
     "@nktkas/hyperliquid": "^0.32.2",
