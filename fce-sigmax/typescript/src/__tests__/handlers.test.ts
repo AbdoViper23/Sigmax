@@ -147,6 +147,41 @@ describe("handlers integration", () => {
     expect(sig.length).toBe(65);
   });
 
+  /**
+   * A Hyperliquid follower has to approve a specific agent address, and must be able to check that
+   * address rather than take a server's word for it. `KEY/UPDATE` is what makes that possible: the
+   * enclave publishes the master PUBLIC key, and the follower derives their own agent address from
+   * it locally. If this field goes missing, onboarding silently degrades to "trust the API".
+   */
+  it("publishes the agent master public key after a key update, and never the key itself", async () => {
+    const privKeyBytes = new Uint8Array(32);
+    privKeyBytes[31] = 0x39;
+
+    const { server, port } = await startMockNode(privKeyBytes);
+    mockServer = server;
+    setSignPort(String(port));
+
+    const srv = new Server("0", String(port), VERSION, register, reportState);
+
+    expect((reportState() as any).hlAgentMasterPubkey).toBeNull();
+
+    const [status] = await srv.handleRequestDirect(
+      "POST",
+      "/action",
+      makeActionBody(
+        stringToBytes32Hex("KEY"),
+        stringToBytes32Hex("UPDATE"),
+        bytesToHex(new TextEncoder().encode("encrypteddata"))
+      )
+    );
+    expect(status).toBe(200);
+
+    const state = reportState() as any;
+    expect(state.hasKey).toBe(true);
+    expect(state.hlAgentMasterPubkey).toMatch(/^0x0[23][0-9a-f]{64}$/); // 33-byte compressed point
+    expect(JSON.stringify(state)).not.toContain(bytesToHex(privKeyBytes).slice(2));
+  });
+
   it("sign without key returns error", async () => {
     setSignPort("9999");
     const srv = new Server("0", "9999", VERSION, register, reportState);

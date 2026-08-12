@@ -23,6 +23,21 @@ export interface SigmaxChainConfig {
   subsFromBlock: bigint;
   /** Max blocks per eth_getLogs call. The public Coston2 RPC caps this at 30. */
   logWindow: bigint;
+
+  // --- Hyperliquid venue (see docs/flare/02-hyperliquid-venue.md) ---
+  /** Trade against the Hyperliquid testnet API. Defaults true — mainnet must be opted into explicitly. */
+  hlTestnet: boolean;
+  /**
+   * Per-trade ceiling in uniform 1e8 units ($15 = 1_500_000_000). Hyperliquid has no on-chain vault
+   * to read a cap from, so this config value IS the cap — it defaults to 0, which disables the venue
+   * rather than trading unbounded. A missing cap must never mean "no limit".
+   */
+  hlPerTradeCapUnits: bigint;
+  /**
+   * How far the order book may deviate from the independent reference feed before we refuse to trade.
+   * Only applied when a feed covers the coin.
+   */
+  hlMaxDeviationBps: number;
 }
 
 /** Read handler config from env with Coston2 defaults (addresses from docs/flare/reference/phase-0-findings.md). */
@@ -55,6 +70,12 @@ export function configFromEnv(env: NodeJS.ProcessEnv = process.env): SigmaxChain
     deadlineSecs: Number(str(env.SIGMAX_DEADLINE_SECS, "600")),
     subsFromBlock: BigInt(str(env.SIGMAX_SUBS_FROM_BLOCK, "0")),
     logWindow: BigInt(str(env.SIGMAX_LOG_WINDOW, "30")),
+
+    // Only "false"/"0" disable testnet — an unset or malformed value must not silently point live
+    // orders at mainnet. (`Boolean("false")` is `true`, which is exactly how that mistake happens.)
+    hlTestnet: !["false", "0"].includes(str(env.SIGMAX_HL_TESTNET, "true").toLowerCase()),
+    hlPerTradeCapUnits: BigInt(str(env.SIGMAX_HL_PER_TRADE_CAP, "0")),
+    hlMaxDeviationBps: Number(str(env.SIGMAX_HL_MAX_DEVIATION_BPS, "500")),
   };
 }
 
@@ -162,8 +183,39 @@ async function readSubscribers(
 }
 
 /**
- * Discover active followers of `strategyId`: Subscribed logs → dedupe → isActive filter →
- * vaultOf → tokenIn balance + vault cap. Returns [] when the registry/factory env is unset.
+ * The subscribers of `strategyId` whose subscription is currently paid up: Subscribed logs → dedupe
+ * → `isActive` filter. Returns [] when the registry env is unset.
+ *
+ * Split out of `readActiveFollowers` because it is the half that is **venue-independent**. The Flare
+ * path continues from here to the follower's vault; the Hyperliquid path needs the subscriber address
+ * itself — a Hyperliquid account IS an EVM address, so the same addresses work unchanged on both
+ * venues, with no mapping table and no second registry.
+ */
+export async function readActiveSubscribers(
+  client: PublicClient,
+  cfg: SigmaxChainConfig,
+  strategyId: `0x${string}`,
+): Promise<`0x${string}`[]> {
+  if (!cfg.subscriptionRegistry) return [];
+
+  const subscribers = await readSubscribers(client, cfg, strategyId);
+
+  const active: `0x${string}`[] = [];
+  for (const subscriber of subscribers) {
+    const isActive = await client.readContract({
+      address: cfg.subscriptionRegistry,
+      abi: REGISTRY_ABI,
+      functionName: "isActive",
+      args: [subscriber, strategyId],
+    });
+    if (isActive) active.push(subscriber);
+  }
+  return active;
+}
+
+/**
+ * Discover active followers of `strategyId` for the FLARE venue: active subscribers → vaultOf →
+ * tokenIn balance + vault cap. Returns [] when the registry/factory env is unset.
  */
 export async function readActiveFollowers(
   client: PublicClient,
@@ -173,18 +225,10 @@ export async function readActiveFollowers(
 ): Promise<FollowerContext[]> {
   if (!cfg.subscriptionRegistry || !cfg.vaultFactory) return [];
 
-  const subscribers = await readSubscribers(client, cfg, strategyId);
+  const subscribers = await readActiveSubscribers(client, cfg, strategyId);
 
   const followers: FollowerContext[] = [];
   for (const subscriber of subscribers) {
-    const active = await client.readContract({
-      address: cfg.subscriptionRegistry,
-      abi: REGISTRY_ABI,
-      functionName: "isActive",
-      args: [subscriber, strategyId],
-    });
-    if (!active) continue;
-
     const vault = await client.readContract({
       address: cfg.vaultFactory,
       abi: FACTORY_ABI,

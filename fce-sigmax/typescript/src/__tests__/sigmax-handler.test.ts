@@ -73,6 +73,9 @@ const config: SigmaxChainConfig = {
   subsFromBlock: 0n,
   // The mocked head is 1000, so one window covers the whole range in a single getLogs call.
   logWindow: 1_000n,
+  hlTestnet: true,
+  hlPerTradeCapUnits: 0n, // Hyperliquid venue disabled for the Flare-path tests
+  hlMaxDeviationBps: 500,
 };
 
 /**
@@ -205,8 +208,9 @@ describe("SIGNAL/EXECUTE handler", () => {
     expect(err).toMatch(/chainId/);
   });
 
-  it("rejects a non-flare venue", async () => {
-    const [, status, err] = await handleSignalExecute(encodeTestSignal({ venue: 1 }));
+  /** Hyperliquid (venue 1) is now supported and covered in hl-handler.test.ts; arbitrum never was. */
+  it("rejects a venue this extension does not execute", async () => {
+    const [, status, err] = await handleSignalExecute(encodeTestSignal({ venue: 0 })); // arbitrum
 
     expect(status).toBe(0);
     expect(err).toMatch(/venue/);
@@ -251,7 +255,12 @@ describe("SIGNAL/EXECUTE handler", () => {
     await handleSignalExecute(encodeTestSignal());
     await handleSignalExecute(encodeTestSignal({ chainId: 1 }));
 
-    expect(reportSigmaxState()).toEqual({ signalsProcessed: 1, signalsRejected: 1, authsIssued: 2 });
+    expect(reportSigmaxState()).toEqual({
+      signalsProcessed: 1,
+      signalsRejected: 1,
+      authsIssued: 2,
+      hlOrdersFilled: 0,
+    });
     expect(JSON.stringify(reportSigmaxState())).not.toContain(TAKE_PROFIT);
   });
 
