@@ -14,7 +14,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useAccount, usePublicClient, useWalletClient } from "wagmi";
 import { formatUnits, parseUnits, zeroAddress, type Hex } from "viem";
-import { EnclaveSignalSealer, ProxyEnclaveKeySource } from "@sigmax/enclave-crypto";
+import { EnclaveSignalSealer, ProxyEnclaveKeySource, addressFromPublicKey } from "@sigmax/enclave-crypto";
 import { PRICE_SCALE, type Signal, type SignalVenueT } from "@sigmax/shared";
 import { env, flareConfigReady } from "../lib/env";
 
@@ -84,6 +84,36 @@ export interface FlarePublishResult {
   txHash: Hex;
   ciphertextBytes: number;
   at: string;
+  /** How many publishes it took to be routed to a live enclave. >1 means stale machines are registered. */
+  attempts: number;
+}
+
+/** `TeeInstructionsSent(uint256 extensionId, bytes32 instructionId, ...)` on the FCC diamond. */
+const TEE_INSTRUCTIONS_SENT_TOPIC =
+  "0xf770e69a9fc05b7180797556ec4cedb6108ce2c56ffa76c84aa087efeb5e6963";
+
+/** Give up rather than spend a leader's gas forever if every machine registered is dead. */
+const MAX_PUBLISH_ATTEMPTS = 12;
+
+/**
+ * Did this publish get routed to the enclave that is actually running?
+ *
+ * FCC picks ONE machine at random from those registered for the extension, and a machine's registration
+ * outlives the process — every restart mints a new identity and leaves the previous one `PRODUCTION`
+ * forever, with no pause command in the scaffold. So "dispatched" and "will be answered" are different
+ * claims, and the routed id is in the event payload.
+ */
+function routedToLiveEnclave(
+  logs: readonly { topics: readonly string[]; data: string }[],
+  liveTee: string,
+): boolean {
+  const target = liveTee.toLowerCase().replace(/^0x/, "");
+  for (const log of logs) {
+    if (log.topics[0]?.toLowerCase() !== TEE_INSTRUCTIONS_SENT_TOPIC) continue;
+    return log.data.toLowerCase().includes(target);
+  }
+  // No routing event at all — nothing to disprove, so let the caller proceed rather than loop.
+  return true;
 }
 
 /**
@@ -93,6 +123,7 @@ export interface FlarePublishResult {
 export function useFlarePublishSignal(strategyIdArg?: Hex) {
   const { address } = useAccount();
   const { data: walletClient } = useWalletClient();
+  const publicClient = usePublicClient({ chainId: env.flareChainId });
   const strategyId = strategyIdArg ?? env.strategyIpId ?? zeroAddress;
 
   const mutation = useMutation({
@@ -100,19 +131,58 @@ export function useFlarePublishSignal(strategyIdArg?: Hex) {
       if (!walletClient || !address) throw new Error("connect a wallet first");
       if (!env.flareInstructionSender) throw new Error("VITE_FLARE_INSTRUCTION_SENDER is not set");
 
-      // Client-side encryption. Plaintext never leaves this function.
+      // Client-side encryption, once. The plaintext never leaves this function, and re-publishing
+      // below deliberately reuses the SAME ciphertext — a second encryption would be a second
+      // commitment for one decision, which is exactly what the commit-before-outcome ledger must not
+      // contain.
       const { ciphertext, byteLength } = await cdr().encryptSignal(signal);
 
-      const txHash = await walletClient.writeContract({
-        address: env.flareInstructionSender,
-        abi: INSTRUCTION_SENDER_ABI,
-        functionName: "publishSignal",
-        args: [strategyId as Hex, "", ciphertext],
-        chain: walletClient.chain,
-        account: address,
-      });
+      /*
+       * The live enclave's identity, derived from the key it publishes. Used to tell a dispatch that
+       * will be answered from one routed to a retired registration — which, measured on Coston2, was
+       * six misroutes in a row. Publishing once and hoping is how a leader's signal silently does
+       * nothing; the e2e script has always retried, and the browser has to as well.
+       *
+       * If the identity cannot be read we publish exactly once rather than loop blindly.
+       */
+      let liveTee: string | null = null;
+      try {
+        liveTee = addressFromPublicKey(await cdr().enclavePublicKey());
+      } catch {
+        liveTee = null;
+      }
 
-      return { signalId: signal.signalId, txHash, ciphertextBytes: byteLength, at: new Date().toISOString() };
+      let txHash: Hex = "0x";
+      let attempts = 0;
+      for (let i = 1; i <= (liveTee && publicClient ? MAX_PUBLISH_ATTEMPTS : 1); i++) {
+        attempts = i;
+        txHash = await walletClient.writeContract({
+          address: env.flareInstructionSender,
+          abi: INSTRUCTION_SENDER_ABI,
+          functionName: "publishSignal",
+          args: [strategyId as Hex, "", ciphertext],
+          chain: walletClient.chain,
+          account: address,
+        });
+
+        if (!liveTee || !publicClient) break;
+        const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+        if (routedToLiveEnclave(receipt.logs, liveTee)) break;
+        if (i === MAX_PUBLISH_ATTEMPTS) {
+          throw new Error(
+            `Published ${i} times and every dispatch was routed to a retired enclave registration. ` +
+              `Retire the stale machines for this extension, then try again.`,
+          );
+        }
+      }
+
+      return {
+        signalId: signal.signalId,
+        txHash,
+        ciphertextBytes: byteLength,
+        at: new Date().toISOString(),
+        attempts,
+      };
     },
   });
 

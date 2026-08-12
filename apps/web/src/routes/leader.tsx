@@ -255,7 +255,14 @@ function LeaderLive() {
                       ciphertextBytes: r.ciphertextBytes,
                     }),
                   );
-                  toast.success(`${v.action} signal published — ${r.ciphertextBytes} bytes, encrypted`);
+                  // Surface the retry count. FCC routes each publish to one machine at random and
+                  // retired registrations never expire, so >1 attempt is normal and worth showing —
+                  // it explains the extra wallet prompts instead of leaving them unaccounted for.
+                  toast.success(
+                    r.attempts > 1
+                      ? `${v.action} signal published — ${r.ciphertextBytes} bytes, encrypted (took ${r.attempts} dispatches to reach a live enclave)`
+                      : `${v.action} signal published — ${r.ciphertextBytes} bytes, encrypted`,
+                  );
                 } finally {
                   setPublishing(false);
                 }
