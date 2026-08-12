@@ -6,10 +6,9 @@ import { StrategyHeader } from "@/components/sigmax/StrategyHeader";
 import { SubscribeCard } from "@/components/sigmax/SubscribeCard";
 import { PositionsTable } from "@/components/sigmax/PositionsTable";
 import { NetworkSwitchPrompt } from "@/components/sigmax/NetworkSwitchPrompt";
-import { chainConfigReady, env } from "@/lib/env";
+import { flareConfigReady, env } from "@/lib/env";
 import { useNetwork } from "@/hooks/useNetwork";
-import { useCopyTrade } from "@/hooks/follower";
-import { useLeader } from "@/hooks/leaders";
+import { useFlareLeader, useFlareSubscription } from "@/hooks/flareControlPlane";
 import { getPublishedSignals, signalProofs } from "@/lib/publishedSignals";
 import { mockLeaderPositions } from "@/lib/mock";
 import type { Leader } from "@/lib/leaders";
@@ -29,7 +28,7 @@ export const Route = createFileRoute("/strategy/$id")({
 
 function StrategyPage() {
   const { id } = Route.useParams();
-  const { leader, loading } = useLeader(id);
+  const { leader, loading } = useFlareLeader(id);
 
   if (!leader) {
     return loading ? <StrategyLoading /> : <StrategyNotFound />;
@@ -37,36 +36,40 @@ function StrategyPage() {
   return <StrategyDetail leader={leader} id={id} />;
 }
 
-// ───────────────────────── detail (real subscribe on Story) ─────────────────────────
+// ───────────────────────── detail (real subscribe on Coston2) ─────────────────────────
 
 function StrategyDetail({ leader, id }: { leader: Leader; id: string }) {
   const net = useNetwork();
-  const copy = useCopyTrade(id as Hex);
+  const sub = useFlareSubscription(id as Hex);
 
-  // Real publish history recorded by this browser (non-secret metadata only — no TP/SL).
+  /**
+   * The publish history this browser recorded. It is deliberately thin: there is no on-chain
+   * enumeration of a strategy's signals, and the only thing worth showing is the proof that a
+   * commitment landed BEFORE the outcome was known. Nothing about the strategy itself is here.
+   */
   const publishedSignals = getPublishedSignals(id).map((s) => ({
-    signalId: s.uuid !== undefined ? `CDR vault #${s.uuid}` : s.signalId,
+    signalId: s.ciphertextBytes ? `${s.signalId.slice(0, 8)}… (${s.ciphertextBytes} bytes)` : s.signalId,
     at: s.at,
-    proofs: signalProofs(s, env.explorers.story),
+    proofs: signalProofs(s, env.explorers.flare),
   }));
 
-  // Plan price comes from the registry read; fall back to the leader's PlanCreated price.
-  const priceWip = Number(copy.monthlyPriceWip) > 0 ? copy.monthlyPriceWip : leader.monthlyPriceWip;
+  // Registry read wins; the PlanCreated price is the fallback while it loads.
+  const price = Number(sub.monthlyPrice) > 0 ? sub.monthlyPrice : leader.monthlyPriceWip;
 
   const subscribeArea = (
     <NetworkSwitchPrompt
-      requiredChain="story"
+      requiredChain="flare"
       current={net.current}
-      onSwitch={() => net.switchTo("story")}
+      onSwitch={() => net.switchTo("flare")}
     >
       <SubscribeCard
         strategyName={leader.displayName}
-        monthlyPriceWip={priceWip}
-        status={copy.active ? "active" : "idle"}
-        activeUntil={copy.activeUntil}
-        pendingLabel={copy.phase === "authorizing" ? "Authorizing…" : "Subscribing…"}
+        monthlyPriceWip={price}
+        status={sub.active ? "active" : "idle"}
+        activeUntil={sub.expiresAt > 0 ? new Date(sub.expiresAt * 1000).toISOString() : undefined}
+        pendingLabel="Subscribing…"
         onSubscribe={async () => {
-          await copy.start();
+          await sub.subscribe();
           toast.success(`You're now copying ${leader.displayName}`);
         }}
       />
@@ -77,7 +80,7 @@ function StrategyDetail({ leader, id }: { leader: Leader; id: string }) {
   // above; the example trade rows render in the mock fallback (no contracts configured) — and always
   // for seeded test leaders, whose whole point is to demo a populated track record even when live.
   const trades =
-    leader.flaggedForTesting || !chainConfigReady
+    leader.flaggedForTesting || !flareConfigReady
       ? mockLeaderPositions[leader.id.toLowerCase()]
       : undefined;
 

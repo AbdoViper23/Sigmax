@@ -260,6 +260,7 @@ describe("SIGNAL/EXECUTE handler", () => {
       signalsRejected: 1,
       authsIssued: 2,
       hlOrdersFilled: 0,
+      duplicatesRejected: 0,
     });
     expect(JSON.stringify(reportSigmaxState())).not.toContain(TAKE_PROFIT);
   });

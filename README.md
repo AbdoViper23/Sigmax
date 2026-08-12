@@ -11,7 +11,7 @@
 **The strategy never leaks — the track record stays verifiable on-chain.**
 
 [![Network](https://img.shields.io/badge/Flare-Coston2%20(114)-e62058)](https://coston2-explorer.flare.network)
-[![Tests](https://img.shields.io/badge/tests-199%20passing-2ea043)](#tests)
+[![Tests](https://img.shields.io/badge/tests-267%20passing-2ea043)](#tests)
 [![Live](https://img.shields.io/badge/end--to--end-executed%20on--chain-2ea043)](#the-run-that-proves-it)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
@@ -228,7 +228,8 @@ build — the Flare path does not import them, and the web app does not depend o
 ```bash
 pnpm install
 pnpm -r test                          # 106 TypeScript tests
-cd packages/contracts && forge test   # 53 contract tests (needs its own foundry.toml)
+cd fce-sigmax/typescript && npm test  # 101 extension tests (standalone npm project)
+cd packages/contracts && forge test   # 60 contract tests (needs its own foundry.toml)
 ```
 
 ### 2. Bring up the enclave
@@ -262,6 +263,17 @@ balances. The confidentiality assertion runs mid-flow.
 ```bash
 pnpm --filter @sigmax/web dev
 ```
+
+Everything the demo script does, a user can do from the browser — on Coston2, with their own wallet:
+
+| | |
+|---|---|
+| **Leader** | Register a plan in one transaction, then publish a signal. **The encryption happens in the browser** — the take-profit and stop-loss are sealed to the enclave's public key before anything leaves the page, and the leader signs the transaction that carries the ciphertext. No server is involved in the publish path at all. |
+| **Follower** | Subscribe (testUSD, split to the leader at pay time), then create **and fund** their vault in a single signature via `createVaultAndDeposit`. Deposit, withdraw, and every copied trade read straight from their own vault. |
+
+The leader's registration is one signature here versus four on the venue this replaced, because
+`createPlan` makes the caller the plan's leader — there is no IP asset to mint or license to grant
+first.
 
 ---
 
@@ -336,9 +348,16 @@ enclave → sign → verify on-chain → swap — with the transactions linked a
   piece of work, not a detail.
 - Testnet only. No mainnet, no audit.
 - Take-profit / stop-loss monitoring is designed and specified but not part of this build.
-- The repo contains a Hyperliquid execution path (complete, 24 tests green) from an earlier venue.
-  **It is not part of this submission and was not re-verified here** — the venue proven above is
-  BlazeSwap on Coston2.
+- **Hyperliquid is a second venue inside the same enclave** — the encrypted signal, the attested code,
+  and the Coston2 control plane are shared; only settlement differs. It is fully tested offline (101
+  extension tests, including byte-equality of the order signing against the reference SDK) but **has
+  not been run against a live enclave or a funded Hyperliquid account**. What is proven versus what
+  is not is itemised in [`docs/flare/02-hyperliquid-venue.md`](docs/flare/02-hyperliquid-venue.md).
+  Note the guarantee is weaker there and deliberately stated as such: on Flare the *contract* enforces
+  the caps, on Hyperliquid *attested code* does, because Hyperliquid has nothing on-chain to verify a
+  TEE signature against.
+- The web app's Story-era hooks (`apps/web/src/hooks/{leader,leaders,follower,strategies,useStoryIp}.ts`)
+  are now orphaned — nothing imports them. They are left in place rather than deleted in this change.
 - Some of the stack predates this hackathon; `docs/flare/submission.md` separates what was reused,
   ported, and written new.
 

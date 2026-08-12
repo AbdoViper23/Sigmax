@@ -175,10 +175,37 @@ the enclave pubkey, send `KEY/UPDATE`).
 
 - **Gate:** `/state` reports the address; injecting a known key yields the expected address.
 
+## What the legacy Hyperliquid path was worth
+
+The pre-Flare Hyperliquid stack (`packages/agent`, Story CDR) was reviewed rather than discarded. Two
+things in it were solving problems the Flare path had not yet met:
+
+**1. Idempotency — ported.** `PositionStore.isProcessed` deduped by `signalId`. The Flare path never
+needed it: a `SwapAuth` is replay-protected by the vault itself (`keccak256(actionId, index) =>
+consumed`). Hyperliquid has no such backstop — the enclave sends a real order the moment it decrypts
+one, so a re-delivered instruction is a second real trade with the follower's money. And re-delivery is
+not hypothetical: FCC routes each instruction to a random registered machine and the publish path
+retries when it lands on a stale one. Now guarded in `handler.ts`, marked *before* the fan-out so a
+crash mid-run can lose a trade but never duplicate one.
+
+**2. Restart-safe confidential state — a better design than the one this doc originally sketched.**
+`PositionStore.persist`/`reconcile` wrote only the non-secret fields and re-derived the secret TP/SL on
+boot by re-reading the encrypted source. That is strictly better than the "seal the position state to
+the enclave's own key" idea sketched below, because it needs no new sealing primitive: the ciphertext
+is already on-chain and the enclave can already decrypt it. When TP/SL monitoring is built, that is the
+shape to build.
+
+Also worth recording: `TpSlMonitor` groups positions by (venue, token, quote) so one price read serves
+every holder, guards against overlapping ticks, and isolates a per-market price failure. All directly
+reusable.
+
+And one defect found: the legacy `HyperliquidExecutor` signs for **every** follower with a single
+`agentPk` — see decision 1b above for why that cannot work beyond one follower.
+
 ## What is proven, and what is not
 
-Every phase gate above passes: **99 tests in the extension** (up from 40), plus the monorepo (106) and
-the contracts (60) still green, and a clean typecheck everywhere.
+Every phase gate above passes: **101 tests in the extension** (up from 40), plus the monorepo (106) and
+the contracts (60) still green, a clean typecheck everywhere, and a successful web build.
 
 Proven offline, with confidence:
 
@@ -201,8 +228,12 @@ Not yet proven — needs a live enclave and a funded Hyperliquid testnet account
   several machines registered the others hold no key and reject Hyperliquid signals.
 
 ### Out of scope on this branch
-- Wiring the **web app** to the Flare path (it is still on Story/Arbitrum). Tracked separately — it is
-  the larger and more urgent gap, and mixing it in would make this branch unreviewable.
+- ~~Wiring the **web app** to the Flare path.~~ **Done** in a follow-up commit on this branch: the
+  leader, follower, strategy and leaderboard routes now read and write the Coston2 control plane, and
+  publishing encrypts in the browser via `useFlarePublish`. The Story-era hooks are orphaned but not
+  deleted. Note the enclave currently rejects a Hyperliquid signal until a key is injected, so the
+  venue is selectable in the publish form before it is operable — intended, since the form is where a
+  leader discovers the venue exists.
 - TP/SL enforcement inside the enclave (missing on the Flare path too — the handler decodes
   `takeProfitPrice`/`stopLossPrice` and never acts on them). Design sketch: a `tick` instruction plus
   **sealed position state** — the enclave encrypts its own position record to itself and returns it as

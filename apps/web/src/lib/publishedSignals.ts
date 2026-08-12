@@ -10,8 +10,15 @@ export interface PublishedSignal {
   uuid?: number;
   action: "ENTRY" | "EXIT";
   at: string; // ISO timestamp
-  /** Story L1 tx hashes from the CDR publish (live mode): `write` commits the signal, `allocate` the vault. */
+  /** Story L1 tx hashes from the legacy CDR publish: `write` commits the signal, `allocate` the vault. */
   txHashes?: { allocate: string; write: string };
+  /**
+   * Flare path: the ONE Coston2 tx that both commits the ciphertext and routes it to the enclave.
+   * Two chains' worth of publishing collapses into a single transaction the leader signs themselves.
+   */
+  flareTxHash?: string;
+  /** Size of the published ciphertext — shown as evidence that only opaque bytes went on-chain. */
+  ciphertextBytes?: number;
 }
 
 const keyFor = (strategyId: string) => `sigmax:published:${strategyId.toLowerCase()}`;
@@ -22,9 +29,13 @@ const keyFor = (strategyId: string) => `sigmax:published:${strategyId.toLowerCas
  * older record or the no-agent fallback), so callers render no link rather than a dead explorer root.
  */
 export function signalProofs(
-  s: Pick<PublishedSignal, "txHashes">,
+  s: Pick<PublishedSignal, "txHashes" | "flareTxHash">,
   explorerBase: string,
 ): { label: string; url: string }[] {
+  // Flare path: one transaction is the whole proof — it carries the ciphertext AND its commitment.
+  if (s.flareTxHash) {
+    return [{ label: "encrypted signal on-chain", url: `${explorerBase}/tx/${s.flareTxHash}` }];
+  }
   if (!s.txHashes) return [];
   const links: { label: string; url: string }[] = [];
   if (s.txHashes.write)

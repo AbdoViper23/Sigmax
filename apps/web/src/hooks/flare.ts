@@ -1,18 +1,41 @@
 /**
  * Flare (Coston2) hooks — publishing a signal and reading the FTSO price.
  *
- * The defining difference from the Story path in `hooks/leader.ts`: the signal is ECIES-encrypted
- * **in this browser** against the enclave's public key, and only the ciphertext is sent — as a
- * transaction the leader signs themselves. No server ever sees the strategy. If the enclave key
- * cannot be fetched we fail loudly rather than fall back to a plaintext path.
+ * The signal is ECIES-encrypted **in this browser** against the enclave's public key, and only the
+ * ciphertext is sent — as a transaction the leader signs themselves. No server ever sees the strategy.
+ * If the enclave key cannot be fetched we fail loudly rather than fall back to a plaintext path.
+ *
+ * That is the whole point of replacing the Story path this supersedes, where the browser POSTed the
+ * plaintext signal — take-profit and stop-loss included — to a server that encrypted it on the
+ * leader's behalf. Encryption has to happen before the strategy leaves the leader's machine, or the
+ * confidentiality claim is about who we promise to be rather than what the system can do.
  */
 
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useAccount, usePublicClient, useWalletClient } from "wagmi";
-import { formatUnits, zeroAddress, type Hex } from "viem";
+import { formatUnits, parseUnits, zeroAddress, type Hex } from "viem";
 import { EnclaveSignalSealer, ProxyEnclaveKeySource } from "@sigmax/enclave-crypto";
-import type { Signal } from "@sigmax/shared";
+import { PRICE_SCALE, type Signal, type SignalVenueT } from "@sigmax/shared";
 import { env, flareConfigReady } from "../lib/env";
+
+/**
+ * What `PublishSignalForm` emits. Defined here rather than imported from the legacy Story hooks so
+ * the Flare path carries no dependency on the stack it replaces.
+ */
+export interface PublishForm {
+  action: "ENTRY" | "EXIT";
+  venue: SignalVenueT;
+  /** Flare/Arbitrum: an EVM address. Hyperliquid: the spot coin symbol (e.g. "USOL"). */
+  token: string;
+  /** Hyperliquid only: the market's quote symbol. Defaults to USDC. */
+  quoteToken?: string;
+  sizePercent: number;
+  maxEntryPrice?: string;
+  takeProfitPrice?: string;
+  stopLossPrice?: string;
+  slippagePercent: number;
+  expiresInHours: number;
+}
 
 const INSTRUCTION_SENDER_ABI = [
   {
@@ -99,6 +122,51 @@ export function useFlarePublishSignal(strategyIdArg?: Hex) {
     error: mutation.error,
     ready: flareConfigReady,
   };
+}
+
+/**
+ * The form-shaped publish the leader page actually calls: build the structured `Signal` from the
+ * form, then encrypt-and-publish it.
+ *
+ * This lives here rather than in the route because the mapping is where a confidentiality mistake
+ * would hide. Note what does NOT happen: the take-profit and stop-loss are read from the form
+ * straight into the object that gets encrypted, and no intermediate copy is sent anywhere.
+ */
+export function useFlarePublish(strategyIdArg?: Hex) {
+  const { publish, publishing, error, ready } = useFlarePublishSignal(strategyIdArg);
+  const strategyId = strategyIdArg ?? env.strategyIpId ?? zeroAddress;
+
+  const publishForm = async (form: PublishForm): Promise<FlarePublishResult> => {
+    const issuedAt = Math.floor(Date.now() / 1000);
+    const signal: Signal = {
+      version: 1,
+      signalId: crypto.randomUUID(),
+      strategyId: strategyId as string,
+      // On Coston2 the control plane and the settlement venue are the same chain.
+      chainId: env.flareChainId,
+      venue: form.venue,
+      action: form.action,
+      // Flare trades ERC-20 addresses; Hyperliquid trades coin symbols.
+      token: form.token,
+      quoteToken:
+        form.venue === "hyperliquid" ? (form.quoteToken ?? "USDC") : (env.flareQuoteToken as string),
+      sizeBps: Math.round(form.sizePercent * 100),
+      maxEntryPrice: scalePrice(form.maxEntryPrice),
+      takeProfitPrice: scalePrice(form.takeProfitPrice),
+      stopLossPrice: scalePrice(form.stopLossPrice),
+      issuedAt,
+      expiresAt: issuedAt + form.expiresInHours * 3600,
+    };
+    return publish(signal);
+  };
+
+  return { publish: publishForm, publishing, error, ready };
+}
+
+/** Human USD price → integer string scaled by 10^PRICE_SCALE (the on-chain signal encoding). */
+function scalePrice(p?: string): string {
+  if (!p || p.trim() === "") return "0";
+  return parseUnits(p as `${number}`, PRICE_SCALE).toString();
 }
 
 export interface FtsoPrice {

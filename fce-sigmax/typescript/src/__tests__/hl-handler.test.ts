@@ -304,6 +304,42 @@ describe("hyperliquid venue", () => {
     expect(exchange.sent).toHaveLength(0);
   });
 
+  /**
+   * FCC routes each instruction to a random registered machine and the publish path retries when it
+   * hits a stale one, so the same signal genuinely can arrive twice. On Flare a replayed authorization
+   * is refused by the vault; here a replay would be a second real market order.
+   */
+  it("refuses to execute the same signal twice", async () => {
+    const exchange = makeExchange();
+    setSigmaxDeps(makeDeps({ hlTransport: exchange.transport }));
+
+    const signal = encodeHlSignal();
+    const [, firstStatus] = await handleSignalExecute(signal);
+    const [data, secondStatus, err] = await handleSignalExecute(signal);
+
+    expect(firstStatus).toBe(1);
+    expect(secondStatus).toBe(0);
+    expect(data).toBeNull();
+    expect(err).toMatch(/already executed/);
+    // Two followers on the first pass, and nothing added by the replay.
+    expect(exchange.sent).toHaveLength(2);
+    expect(reportSigmaxState()).toMatchObject({ duplicatesRejected: 1 });
+  });
+
+  /** The guard is per signal, not a global latch — a genuinely new signal must still trade. */
+  it("still executes a different signal after one has been executed", async () => {
+    const exchange = makeExchange();
+    setSigmaxDeps(makeDeps({ hlTransport: exchange.transport }));
+
+    await handleSignalExecute(encodeHlSignal());
+    const [, status] = await handleSignalExecute(
+      encodeHlSignal({ signalId: "0xfedcba98765432100123456789abcdef" }),
+    );
+
+    expect(status).toBe(1);
+    expect(exchange.sent).toHaveLength(4);
+  });
+
   it("rejects an expired signal before contacting the exchange", async () => {
     const exchange = makeExchange();
     setSigmaxDeps(makeDeps({ hlTransport: exchange.transport }));
