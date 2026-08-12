@@ -36,6 +36,44 @@ pnpm --filter @sigmax/agent exec tsx scripts/hl-inject-key.ts
 pnpm --filter web dev
 ```
 
+### Delivery rules (from the FCC team, 2026-08-12)
+
+A dispatch event on-chain is **not** delivery. Providers POST the cosigned instruction straight to your
+machine's registered URL (`:6664/instruction`) — the proxy does not discover anything from the indexer,
+so nothing retries on your behalf. For an instruction to arrive, the selected machine needs **all** of:
+
+| Requirement | How to check | Verified for us |
+|---|---|---|
+| Status `2` = PRODUCTION | `getTeeMachineStatus(teeId)` | ✅ `0x736148d4…` = 2 |
+| An availability check **< ~6h old** | no public getter — a machine idle overnight stops receiving | ⚠️ stale (last live 2026-08-11) |
+| A registered `teeId` | `getActiveTeeMachines(extensionId)` | ✅ one machine, ext `66127` |
+| A **stable public HTTPS** URL | it is stored on-chain, so a changing URL keeps receiving nothing | ✅ reserved ngrok domain |
+
+`pnpm --filter @sigmax/agent resync` now audits the first, third and fourth and prints where to look.
+
+**Each dispatch selects ONE machine at random from those registered.** So a single stale registration
+beside a live one produces intermittent, apparently random silence. Old machines never expire by
+themselves, and every restart leaves another behind.
+
+> This is what `flare-e2e-demo.ts` papers over by republishing up to 20 times until it happens to be
+> routed to the live machine. The real fix is to **pause the stale identity**. Right now we have exactly
+> one machine registered, so the retry loop is not currently hiding anything — but it will be after the
+> next restart if the old identity is not paused.
+
+**A restart always creates a new TEE identity** — the key is not persisted in simulated *or* production
+mode, and there is no supported way to restore an old `teeId`. So the recovery order is fixed:
+
+```
+restart → new identity → re-register (post-build.sh) → reach PRODUCTION → PAUSE the stale identity
+```
+
+Then run `APPLY=1 pnpm --filter @sigmax/agent resync` to point the factory and vaults at the new
+identity, and re-inject the Hyperliquid key.
+
+Other confirmed constraints, all of which we already satisfy: `opType` prefixed `F_` is reserved (ours
+are `KEY` and `SIGNAL`); the pinned FlareTeeManager is `0x1a9C…18aE`; don't mix independently-chosen
+versions of tee-node / tee-proxy / go-flare-common (we pin `TEE_NODE_VERSION=v0.0.25`).
+
 ### The two failures that produce no error message
 
 1. **No keeper running.** The enclave signs, the proxy files the result, and nothing relays it. After

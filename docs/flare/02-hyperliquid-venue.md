@@ -109,7 +109,7 @@ wallet derives the agent address it is about to approve **itself**. It verifies 
 than trusting an address a server returned. Derivation is deterministic, so an enclave restart (which
 clears the injected key) needs re-injection only — never re-approval by every follower.
 
-**2. The agent key is injected, not enclave-generated — for now.** Three options exist:
+**2. The agent key is injected, not enclave-generated — permanently.** Three options exist:
 
 | | mechanism | address after restart | who holds the key |
 |---|---|---|---|
@@ -117,10 +117,22 @@ clears the injected key) needs re-injection only — never re-approval by every 
 | B | injected via `KEY/UPDATE` from cold storage | stable | enclave **+ operator** |
 | C | derived in-enclave from sealed material bound to the code hash | stable | enclave only |
 
-**C is the destination**, but it depends on whether the FCC node exposes derived key material to the
-extension — unverified, so it must not be built on before a spike. **B ships now.** The operator can
-trade with it, but still cannot withdraw, and — the point — the *strategy plaintext* never leaves the
-enclave. That is one shared secret instead of today's three (trade key + decrypt key + plaintext).
+**Corrected 2026-08-12.** An earlier version of this doc called C "the destination" and B a stopgap. The
+FCC team has since confirmed that a restart always mints a new TEE identity and **the key is not
+persisted in simulated *or* production mode**, with no supported way to restore an old `teeId`. There is
+therefore no sealed material surviving a restart to derive from: C is not a pending spike, it is
+unavailable. Real attestation will not change this.
+
+That makes **B the permanent answer**, and it reframes the trade-off honestly rather than apologetically.
+An operator holding the master secret in cold storage is what gives followers a *stable* agent address
+across restarts that FCC guarantees will happen. Option A — generate inside the enclave — is strictly
+worse in practice: every restart would invalidate every follower's `approveAgent`.
+
+What B costs is real and worth stating plainly: the operator can place trades with that key. They still
+cannot withdraw (Hyperliquid rejects withdrawals signed by an agent key), and the *strategy plaintext*
+never leaves the enclave. So it is one shared secret instead of the legacy path's three — trade key,
+decrypt key, and the plaintext itself — and the confidentiality claim, which is the product, is
+untouched.
 
 ## Phases and acceptance criteria
 
@@ -190,10 +202,11 @@ crash mid-run can lose a trade but never duplicate one.
 
 **2. Restart-safe confidential state — a better design than the one this doc originally sketched.**
 `PositionStore.persist`/`reconcile` wrote only the non-secret fields and re-derived the secret TP/SL on
-boot by re-reading the encrypted source. That is strictly better than the "seal the position state to
-the enclave's own key" idea sketched below, because it needs no new sealing primitive: the ciphertext
-is already on-chain and the enclave can already decrypt it. When TP/SL monitoring is built, that is the
-shape to build.
+boot by re-reading the encrypted source. That is better than the "seal the position state to the
+enclave's own key" idea an earlier draft preferred, and the FCC team's confirmation that a restart mints
+a new identity in *both* simulated and production mode makes it the only workable option: anything the
+enclave sealed to itself is unreadable after a restart, whereas the signal's ciphertext is still on-chain
+and still decryptable. When TP/SL monitoring is built, that is the shape to build.
 
 Also worth recording: `TpSlMonitor` groups positions by (venue, token, quote) so one price read serves
 every holder, guards against overlapping ticks, and isolates a per-market price failure. All directly
@@ -235,7 +248,13 @@ Not yet proven — needs a live enclave and a funded Hyperliquid testnet account
   venue is selectable in the publish form before it is operable — intended, since the form is where a
   leader discovers the venue exists.
 - TP/SL enforcement inside the enclave (missing on the Flare path too — the handler decodes
-  `takeProfitPrice`/`stopLossPrice` and never acts on them). Design sketch: a `tick` instruction plus
-  **sealed position state** — the enclave encrypts its own position record to itself and returns it as
-  opaque bytes, so any keeper can hand it back later; restart-safe with no enclave persistence.
+  `takeProfitPrice`/`stopLossPrice` and never acts on them). Design: a `tick` instruction plus the legacy
+  agent's `persist`/`reconcile` shape — publish only the NON-secret position fields and re-derive the
+  secret thresholds by re-reading the signal's on-chain ciphertext.
+
+  Note this rules out the "seal the position record to the enclave's own key" variant that an earlier
+  draft preferred: a restart mints a new identity and the old key is gone in *both* simulated and
+  production mode, so anything the enclave sealed to itself becomes permanently unreadable. Re-deriving
+  from the published ciphertext is the only restart-safe option, which is exactly what the legacy agent
+  already did.
 - Deleting the legacy Story path. It stays until the web app no longer needs it.
