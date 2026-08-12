@@ -6,7 +6,7 @@ import { LeaderCard } from "@/components/sigmax/LeaderCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useLeaders } from "@/hooks/leaders";
+import { useFlareLeaders } from "@/hooks/flareControlPlane";
 import { leaderToRow, sortLeaders, type LeaderSort } from "@/lib/leaders";
 import { cn } from "@/lib/utils";
 
@@ -29,7 +29,7 @@ const SORTS: { key: LeaderSort; label: string }[] = [
 ];
 
 function LeaderboardPage() {
-  const { leaders, loading } = useLeaders();
+  const { leaders, loading } = useFlareLeaders();
   const [sort, setSort] = useState<LeaderSort>("return");
   const [view, setView] = useState<"grid" | "table">("grid");
   const [query, setQuery] = useState("");

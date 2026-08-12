@@ -78,7 +78,47 @@ export function setSigmaxDeps(d: SigmaxDeps | null): void {
 }
 
 /** Counters surfaced via GET /state — safe to expose (no strategy content). */
-const stats = { signalsProcessed: 0, signalsRejected: 0, authsIssued: 0, hlOrdersFilled: 0 };
+const stats = {
+  signalsProcessed: 0,
+  signalsRejected: 0,
+  authsIssued: 0,
+  hlOrdersFilled: 0,
+  duplicatesRejected: 0,
+};
+
+/**
+ * Signal ids already executed on an OFF-CHAIN venue, in enclave memory.
+ *
+ * Ported from the legacy pipeline's `PositionStore.isProcessed`, which the Flare path never needed and
+ * Hyperliquid genuinely does. The difference is where the guard lives: a Flare authorization is
+ * replay-protected by the vault itself (`keccak256(actionId, index) => consumed`), so re-running the
+ * same signal costs nothing. Hyperliquid has no such backstop — the enclave sends a real order the
+ * moment it decrypts one, so a re-delivered instruction is a second real trade with the follower's
+ * money. And re-delivery is not hypothetical: FCC routes each instruction to a random registered
+ * machine, and the publish path retries when it lands on a stale one.
+ *
+ * Deliberately ENTRY-and-EXIT alike, unlike the legacy store which skipped deduping exits so a failed
+ * exit could be retried. That trade-off made sense when an exit was an idempotent on-chain swap; here
+ * a duplicate exit is an extra market sell.
+ *
+ * Memory-only and cleared by a restart. Bounded so a long-running enclave cannot grow without limit.
+ */
+const executedSignalIds = new Set<string>();
+const MAX_TRACKED_SIGNALS = 5_000;
+
+function alreadyExecuted(signalId: string): boolean {
+  return executedSignalIds.has(signalId);
+}
+
+function markExecuted(signalId: string): void {
+  if (executedSignalIds.size >= MAX_TRACKED_SIGNALS) {
+    // Drop the oldest insertion (Set preserves insertion order) rather than clearing everything —
+    // wiping the whole set would make every recent signal replayable at once.
+    const oldest = executedSignalIds.values().next().value;
+    if (oldest !== undefined) executedSignalIds.delete(oldest);
+  }
+  executedSignalIds.add(signalId);
+}
 
 export function reportSigmaxState(): unknown {
   return { ...stats };
@@ -89,6 +129,8 @@ export function resetSigmaxState(): void {
   stats.signalsRejected = 0;
   stats.authsIssued = 0;
   stats.hlOrdersFilled = 0;
+  stats.duplicatesRejected = 0;
+  executedSignalIds.clear();
   resetSubscriberCache();
 }
 
@@ -215,6 +257,19 @@ async function handleHyperliquidSignal(
     // Refusing beats trading unbounded: on this venue the config value is the only cap that exists.
     return reject("hyperliquid per-trade cap is not configured");
   }
+  // Replay guard. Unlike a Flare authorization — which each vault refuses to consume twice — an order
+  // sent to Hyperliquid is final the moment it fills, so this check is the only thing standing between
+  // a re-delivered instruction and a second real trade.
+  if (alreadyExecuted(signal.signalId)) {
+    stats.duplicatesRejected += 1;
+    return reject("signal already executed");
+  }
+
+  // Marked BEFORE any order is placed, not after. A crash mid-fan-out then leaves some followers
+  // traded and some not, and a retry will not pick up the stragglers — but the alternative is a retry
+  // re-trading everyone who already filled. A missed trade is a lost opportunity; a duplicate trade
+  // spends the follower's money twice, so the guard errs in the direction that cannot lose funds.
+  markExecuted(signal.signalId);
 
   try {
     const subscribers = await readActiveSubscribers(d.client, d.config, signal.strategyId);

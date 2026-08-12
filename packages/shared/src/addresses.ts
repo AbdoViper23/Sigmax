@@ -28,6 +28,12 @@ export const ARBITRUM_ADDRESSES = {
  */
 export const COSTON2_ADDRESSES = {
   fxrp: "0x0b6A3645c240605887a5532109323A3E12273dc7", // FTestXRP, 6 decimals
+  /**
+   * testUSD (6 decimals) — the quote leg of the FXRP pool we seeded, and the subscription pay token.
+   * Coston2 has no real stablecoin, and this one exposes a public `mint()`, which is what makes a
+   * self-serve demo possible. Fixed for this testnet, so it belongs here rather than in env.
+   */
+  testUsd: "0x6623C0BB56aDb150dC9C6BdB8682521354c2BF73",
   assetManagerFxrp: "0xc1Ca88b937d0b528842F95d5731ffB586f4fbDFA",
   contractRegistry: "0xaD67FE66660Fb8dFE9d6b1b4240d8650e30F6019",
   ftsoV2: "0xC4e9c78EA53db782E28f28Fdf80BaF59336B304d",

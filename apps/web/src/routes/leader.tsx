@@ -11,11 +11,10 @@ import { StrategyStatsCard } from "@/components/sigmax/StrategyStatsCard";
 import { NetworkSwitchPrompt } from "@/components/sigmax/NetworkSwitchPrompt";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { chainConfigReady, env, publishableTokens } from "@/lib/env";
+import { flareConfigReady, env, flarePublishableTokens } from "@/lib/env";
 import { useNetwork } from "@/hooks/useNetwork";
-import { usePublishSignal, useStrategyStats } from "@/hooks/leader";
-import { useLeaders } from "@/hooks/leaders";
-import { useRegisterLeader, type RegisterStep } from "@/hooks/useStoryIp";
+import { useFlarePublish } from "@/hooks/flare";
+import { useFlareLeaders, useFlarePlan } from "@/hooks/flareControlPlane";
 import { addPublishedSignal, getPublishedSignals, signalProofs } from "@/lib/publishedSignals";
 import { mockTx } from "@/lib/mock";
 
@@ -25,7 +24,7 @@ export const Route = createFileRoute("/leader")({
       { title: "Become a leader — Sigmax" },
       {
         name: "description",
-        content: "Register as a leader and publish encrypted signals on Story Aeneid.",
+        content: "Register as a leader and publish encrypted signals on Flare Coston2.",
       },
     ],
   }),
@@ -34,8 +33,10 @@ export const Route = createFileRoute("/leader")({
 
 function LeaderPage() {
   const { isConnected } = useAccount();
-  // Live when contracts are configured (VITE_* env) AND a wallet is connected; else mock for dev/SSR.
-  return chainConfigReady && isConnected ? <LeaderLive /> : <LeaderMock />;
+  // Live when the Flare control plane + enclave proxy are configured AND a wallet is connected.
+  // `flareConfigReady` (not `chainConfigReady`) is the gate now: the Story contracts are irrelevant
+  // to this page, and gating on them meant a fully-configured Flare deployment still rendered mock.
+  return flareConfigReady && isConnected ? <LeaderLive /> : <LeaderMock />;
 }
 
 /**
@@ -137,21 +138,12 @@ function WhatYouGetCard() {
   );
 }
 
-// The 4 on-chain registration transactions, surfaced as a live checklist while they run.
-const REGISTER_STEPS = [
-  "Create your Story IP asset",
-  "Attach license terms",
-  "Mint the agent's operator license",
-  "Create your subscription plan",
-];
-const STEP_INDEX: Record<RegisterStep, number> = {
-  idle: -1,
-  "registering-ip": 0,
-  "attaching-terms": 1,
-  "minting-license": 2,
-  "creating-plan": 3,
-  done: 4,
-};
+/**
+ * Registration is now a SINGLE transaction. On Story it took four — mint an IP asset, attach license
+ * terms, mint the agent an operator license, create the plan — so the UI carried a live checklist to
+ * make the wait legible. On Coston2 `createPlan` makes the caller the leader outright, so there is no
+ * multi-step progress left to show.
+ */
 
 /** Greyed-out publish area shown until the leader registers — makes "register first" obvious. */
 function LockedPublish() {
@@ -159,7 +151,8 @@ function LockedPublish() {
     <div className="relative overflow-hidden rounded-xl">
       <div className="pointer-events-none select-none opacity-50">
         <PublishSignalForm
-          tokenOptions={publishableTokens}
+          tokenOptions={flarePublishableTokens}
+          flareQuoteSymbol="testUSD"
           publishing={false}
           onPublish={async () => {}}
         />
@@ -180,25 +173,25 @@ function LeaderLive() {
   const net = useNetwork();
   const { address } = useAccount();
   const qc = useQueryClient();
-  const { leaders } = useLeaders();
+  const { leaders } = useFlareLeaders();
 
-  // A leader's own strategy is the plan whose on-chain leader == the connected wallet.
+  // On Coston2 a leader's strategy id IS their address (`createPlan` makes the caller the leader), so
+  // registration is one signature — no ERC-6551 IP account to mint first, as the Story path needed.
+  const plan = useFlarePlan();
+  const myId = plan.strategyId;
+  const registered = plan.registered;
   const mine = leaders.find((l) => l.leaderAddress.toLowerCase() === address?.toLowerCase());
-  const myId = mine?.id as Hex | undefined;
-  const registered = Boolean(mine);
 
-  const { register, step } = useRegisterLeader();
-  const stats = useStrategyStats(myId);
-  const { publish } = usePublishSignal(myId);
+  const { publish } = useFlarePublish(myId);
   const [publishing, setPublishing] = useState(false);
   const [signals, setSignals] = useState(() => getPublishedSignals(myId));
 
-  const stepIdx = STEP_INDEX[step];
   const lastPublished = signals[0]
     ? {
-        signalId:
-          signals[0].uuid !== undefined ? `CDR vault #${signals[0].uuid}` : signals[0].signalId,
-        proofs: signalProofs(signals[0], env.explorers.story),
+        signalId: signals[0].ciphertextBytes
+          ? `${signals[0].signalId.slice(0, 8)}… (${signals[0].ciphertextBytes} bytes of ciphertext)`
+          : signals[0].signalId,
+        proofs: signalProofs(signals[0], env.explorers.flare),
         at: signals[0].at,
       }
     : undefined;
@@ -207,35 +200,28 @@ function LeaderLive() {
     <Shell journeyStep={registered ? 1 : 0}>
       <div className="grid animate-enter gap-6 lg:grid-cols-2" style={{ animationDelay: "80ms" }}>
         <NetworkSwitchPrompt
-          requiredChain="story"
+          requiredChain="flare"
           current={net.current}
-          onSwitch={() => net.switchTo("story")}
+          onSwitch={() => net.switchTo("flare")}
         >
           <RegisterStrategyCard
             registered={registered}
-            ipId={mine?.id}
-            progress={
-              stepIdx >= 0 && stepIdx < REGISTER_STEPS.length
-                ? { steps: REGISTER_STEPS, current: stepIdx }
-                : undefined
-            }
+            ipId={myId}
             onRegister={async (v) => {
-              await register(v);
-              // Refresh the on-chain leader list so this page flips to "registered" immediately
-              // (otherwise the UI stays stale until a re-render).
-              await qc.invalidateQueries({ queryKey: ["leaders-onchain"] });
+              await plan.createPlan({ ...v, monthlyPrice: v.monthlyPriceWip });
+              await qc.invalidateQueries({ queryKey: ["flare-leaders"] });
               toast.success(`Registered as "${v.displayName}"`);
             }}
           />
         </NetworkSwitchPrompt>
 
         {registered ? (
-          /* Per-leader: subscribers + earned from this strategy's Subscribed events; return from trades. */
+          /* Subscribers + track record come from this strategy's own Coston2 events. */
           <StrategyStatsCard
-            subscribers={stats.subscribers}
+            subscribers={mine?.subscribers ?? 0}
             signalsPublished={signals.length}
             verifiedReturnPct={mine?.performance.verifiedReturnPct ?? null}
-            totalEarnedWip={stats.totalEarnedWip}
+            totalEarnedWip={earnedFromSubscribers(mine?.subscribers ?? 0, plan.monthlyPrice)}
           />
         ) : (
           <WhatYouGetCard />
@@ -245,28 +231,31 @@ function LeaderLive() {
       <div className="animate-enter" style={{ animationDelay: "160ms" }}>
         {registered && myId ? (
           <NetworkSwitchPrompt
-            requiredChain="story"
+            requiredChain="flare"
             current={net.current}
-            onSwitch={() => net.switchTo("story")}
+            onSwitch={() => net.switchTo("flare")}
           >
             <PublishSignalForm
-              tokenOptions={publishableTokens}
+              tokenOptions={flarePublishableTokens}
+              flareQuoteSymbol="testUSD"
               publishing={publishing}
               lastPublished={lastPublished}
               onPublish={async (v) => {
                 setPublishing(true);
                 try {
+                  // Encryption happens inside this call, in this browser. Nothing is POSTed to a
+                  // server first — the leader signs the transaction that carries the ciphertext.
                   const r = await publish(v);
                   setSignals(
                     addPublishedSignal(myId, {
                       signalId: r.signalId,
-                      uuid: r.uuid,
                       action: v.action,
                       at: r.at,
-                      txHashes: r.txHashes,
+                      flareTxHash: r.txHash,
+                      ciphertextBytes: r.ciphertextBytes,
                     }),
                   );
-                  toast.success(`${v.action} signal published`);
+                  toast.success(`${v.action} signal published — ${r.ciphertextBytes} bytes, encrypted`);
                 } finally {
                   setPublishing(false);
                 }
@@ -279,6 +268,16 @@ function LeaderLive() {
       </div>
     </Shell>
   );
+}
+
+/**
+ * The leader's take so far: gross subscriptions × (1 − platform fee) — the exact split the registry
+ * transfers at pay time. An approximation in one respect only: it counts one month per subscriber,
+ * since renewals are not distinguishable from the subscriber set alone.
+ */
+function earnedFromSubscribers(subscribers: number, monthlyPrice: string): string {
+  const gross = subscribers * Number(monthlyPrice || "0");
+  return (gross * (1 - env.platformFeeBps / 10_000)).toFixed(2);
 }
 
 // ───────────── disconnected / unconfigured (demo registration + publish, local state) ─────────────
@@ -344,7 +343,8 @@ function LeaderMock() {
       <div className="animate-enter" style={{ animationDelay: "160ms" }}>
         {registered ? (
           <PublishSignalForm
-            tokenOptions={publishableTokens}
+            tokenOptions={flarePublishableTokens}
+            flareQuoteSymbol="testUSD"
             publishing={false}
             onPublish={async (v) => {
               await mockTx();

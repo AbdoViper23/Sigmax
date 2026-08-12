@@ -39,6 +39,46 @@ export const SUBSCRIPTION_REGISTRY_ABI = parseAbi([
   "event SubscriptionCancelled(address indexed strategyId, address indexed subscriber)",
 ]);
 
+/**
+ * CopyVaultFlare — the follower's own non-custodial vault on Coston2.
+ *
+ * `executeSwapWithTeeSig` is deliberately absent: only the keeper ever calls it, and the browser has
+ * no business holding an authorization. Everything here is owner-scoped (fund, withdraw, inspect).
+ */
+export const COPY_VAULT_FLARE_ABI = parseAbi([
+  "function deposit(address token, uint256 amount)",
+  "function withdraw(address token, uint256 amount)",
+  "function owner() view returns (address)",
+  "function perTradeCap() view returns (uint256)",
+  "function paused() view returns (bool)",
+  "function tokenWhitelisted(address) view returns (bool)",
+  "function routerWhitelisted(address) view returns (bool)",
+  "function teeAddress() view returns (address)",
+  "event Swapped(address indexed tokenIn, uint256 amountIn, address indexed tokenOut, uint256 received)",
+  "event Withdrawn(address indexed token, address indexed to, uint256 amount)",
+]);
+
+/**
+ * CopyVaultFlareFactory — one vault per follower, at a deterministic CREATE2 address.
+ *
+ * `createVaultAndDeposit` is the onboarding path: create and fund in ONE signature. The two-step
+ * `createVault` + `deposit` is kept for a follower who already has a vault and wants to top it up.
+ */
+export const COPY_VAULT_FLARE_FACTORY_ABI = parseAbi([
+  "function vaultOf(address follower) view returns (address)",
+  "function createVault(address[] tokens, address[] routers, uint256 cap) returns (address vault)",
+  "function createVaultAndDeposit(address[] tokens, address[] routers, uint256 cap, address token, uint256 amount) returns (address vault)",
+  "function teeAddress() view returns (address)",
+  "event VaultCreated(address indexed owner, address vault)",
+  "event VaultFunded(address indexed owner, address vault, address token, uint256 amount)",
+]);
+
+/** testUSD's public faucet — the only reason a Coston2 demo can be self-serve. */
+export const TEST_USD_ABI = parseAbi([
+  "function mint()",
+  "function balanceOf(address) view returns (uint256)",
+]);
+
 export const ERC20_ABI = parseAbi([
   "function balanceOf(address) view returns (uint256)",
   "function decimals() view returns (uint8)",

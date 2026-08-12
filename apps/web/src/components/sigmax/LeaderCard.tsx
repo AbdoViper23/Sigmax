@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { TestBadge } from "./TestBadge";
 import { cn } from "@/lib/utils";
-import { useCopyTrade } from "@/hooks/follower";
+import { useFlareSubscription } from "@/hooks/flareControlPlane";
 import type { Leader } from "@/lib/leaders";
 
 /** Monogram seeded from the leader handle — same square-badge idiom as the Nav logo. */
@@ -96,12 +96,16 @@ export function LeaderCard({ leader }: { leader: Leader }) {
 }
 
 /**
- * Quick subscribe directly from the card: one click runs the chained subscribe + agent-authorize
- * (useCopyTrade). Shows a "Subscribed" state when already active so the leaderboard doubles as an
- * at-a-glance view of who you're copying. The full strategy page stays one tap away.
+ * Quick subscribe directly from the card. Shows a "Subscribed" state when already active so the
+ * leaderboard doubles as an at-a-glance view of who you're copying; the full strategy page stays one
+ * tap away.
+ *
+ * Subscribing does NOT grant anything over the follower's funds — it only pays for access to the
+ * leader's signals. Funding is a separate, explicit step on their own vault (see VaultCard), which is
+ * why this can safely be a one-click action.
  */
 function CardCta({ leader }: { leader: Leader }) {
-  const copy = useCopyTrade(leader.id as Hex);
+  const copy = useFlareSubscription(leader.id as Hex);
   const [busy, setBusy] = useState(false);
 
   if (copy.active) {
@@ -132,10 +136,10 @@ function CardCta({ leader }: { leader: Leader }) {
         onClick={async () => {
           setBusy(true);
           try {
-            await copy.start();
+            await copy.subscribe();
             toast.success(`You're now copying ${leader.displayName}`);
-          } catch {
-            /* useCopyTrade already surfaced the error via toast */
+          } catch (e) {
+            toast.error(e instanceof Error ? e.message : "Couldn't subscribe");
           } finally {
             setBusy(false);
           }

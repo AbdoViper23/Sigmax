@@ -46,8 +46,13 @@ export const env = {
 
   // Fixed Coston2 infrastructure (verified on-chain).
   fxrp: asAddr(E.VITE_FXRP_ADDRESS) ?? (COSTON2_ADDRESSES.fxrp as Hex),
-  /** Quote leg for FXRP swaps; set once Phase 0b picks the stablecoin/pool. */
-  flareQuoteToken: asAddr(E.VITE_FLARE_QUOTE_TOKEN),
+  /**
+   * Quote leg for FXRP swaps AND the subscription pay token — testUSD, the token the seeded pool
+   * trades against. Defaulted from @sigmax/shared because it is fixed on this testnet; leaving it
+   * env-only meant one unset variable silently made `flareConfigReady` false and dropped the whole
+   * Flare UI back to mock.
+   */
+  flareQuoteToken: asAddr(E.VITE_FLARE_QUOTE_TOKEN) ?? (COSTON2_ADDRESSES.testUsd as Hex),
   blazeSwapRouter: asAddr(E.VITE_BLAZESWAP_ROUTER) ?? (COSTON2_ADDRESSES.blazeSwapRouter as Hex),
   ftsoV2: asAddr(E.VITE_FTSO_V2) ?? (COSTON2_ADDRESSES.ftsoV2 as Hex),
   ftsoXrpUsdFeedId: FTSO_FEED_IDS.xrpUsd,
@@ -124,4 +129,13 @@ export const hlConfigReady = Boolean(
 export const publishableTokens: { symbol: string; address: string }[] = [
   { symbol: "FXRP", address: env.fxrp },
   { symbol: "WETH", address: env.weth },
+];
+
+/**
+ * What a Flare signal can trade: only what every `CopyVaultFlare` whitelists, which is the pair the
+ * seeded pool actually has liquidity for. Offering anything else would produce signals the vaults
+ * reject on-chain — a token list is a promise about what will execute, not a menu.
+ */
+export const flarePublishableTokens: { symbol: string; address: string }[] = [
+  { symbol: "FXRP", address: env.fxrp },
 ];

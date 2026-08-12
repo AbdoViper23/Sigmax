@@ -2,13 +2,17 @@ import { TxButton } from "./TxButton";
 import type { ChainId } from "./NetworkBadge";
 
 export interface NetworkSwitchPromptProps {
-  requiredChain: "story" | "arbitrum";
+  requiredChain: "flare" | "story" | "arbitrum";
   current: ChainId;
   onSwitch: () => Promise<void>;
   children: React.ReactNode;
 }
 
-const chainLabel = { story: "Story Aeneid", arbitrum: "Arbitrum" } as const;
+const chainLabel = {
+  flare: "Flare Coston2",
+  story: "Story Aeneid",
+  arbitrum: "Arbitrum",
+} as const;
 
 /**
  * Wrap an action area. If current chain ≠ required, replaces the action with a

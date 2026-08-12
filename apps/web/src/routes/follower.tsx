@@ -21,9 +21,19 @@ import {
 } from "@/components/ui/alert-dialog";
 import { SubscriptionStatusBadge } from "@/components/sigmax/SubscriptionStatusBadge";
 import { PositionsTable } from "@/components/sigmax/PositionsTable";
+import { VaultCard } from "@/components/sigmax/VaultCard";
+import { NetworkSwitchPrompt } from "@/components/sigmax/NetworkSwitchPrompt";
 import { cn } from "@/lib/utils";
-import { useMySubscriptions, useSubscription, type MySubscription } from "@/hooks/follower";
-import { useHlBalance, useHlPositions, useAgentApproval, useRevokeAgent } from "@/hooks/hyperliquid";
+import { useNetwork } from "@/hooks/useNetwork";
+import {
+  formatToken,
+  useCancelFlareSubscription,
+  useFlareVault,
+  useFlareVaultTrades,
+  useFlareWallet,
+  useMyFlareSubscriptions,
+  type MyFlareSubscription,
+} from "@/hooks/flareControlPlane";
 import { env } from "@/lib/env";
 
 export const Route = createFileRoute("/follower")({
@@ -39,7 +49,7 @@ export const Route = createFileRoute("/follower")({
   component: DashboardPage,
 });
 
-const HL_APP = env.hlTestnet ? "https://app.hyperliquid-testnet.xyz" : "https://app.hyperliquid.xyz";
+const QUOTE_SYMBOL = "testUSD";
 
 function DashboardPage() {
   const { isConnected } = useAccount();
@@ -103,37 +113,41 @@ function Monogram({ seed }: { seed: string }) {
  * how much is in my account, how many strategies trade with it, and does the agent have access.
  */
 function OverviewStrip({
-  usdc,
+  vaultFxrp,
   balLoading,
   copying,
-  agentApproved,
+  vaultExists,
+  explorerUrl,
 }: {
-  usdc: number;
+  vaultFxrp: string;
   balLoading: boolean;
   copying: number;
-  agentApproved: boolean;
+  vaultExists: boolean;
+  explorerUrl?: string;
 }) {
   return (
     <Card className="animate-enter" style={{ animationDelay: "60ms" }}>
       <CardContent className="grid grid-cols-2 gap-x-4 gap-y-6 py-5 sm:grid-cols-3">
         <div>
-          <div className="text-xs uppercase tracking-wide text-muted-foreground">Your balance</div>
+          <div className="text-xs uppercase tracking-wide text-muted-foreground">In your vault</div>
           {balLoading ? (
             <Skeleton className="mt-1.5 h-8 w-28" />
           ) : (
             <div className="mt-1 font-mono text-2xl font-semibold tabular-nums">
-              {usdc.toLocaleString(undefined, { maximumFractionDigits: 2 })}{" "}
-              <span className="text-base font-medium text-muted-foreground">USDC</span>
+              {Number(vaultFxrp).toLocaleString(undefined, { maximumFractionDigits: 4 })}{" "}
+              <span className="text-base font-medium text-muted-foreground">FXRP</span>
             </div>
           )}
-          <a
-            href={HL_APP}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-          >
-            Deposit <ArrowUpRight className="h-3 w-3" aria-hidden />
-          </a>
+          {explorerUrl && (
+            <a
+              href={explorerUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+            >
+              View on explorer <ArrowUpRight className="h-3 w-3" aria-hidden />
+            </a>
+          )}
         </div>
         <div>
           <div className="text-xs uppercase tracking-wide text-muted-foreground">Copying</div>
@@ -143,24 +157,24 @@ function OverviewStrip({
           </div>
         </div>
         <div>
-          <div className="text-xs uppercase tracking-wide text-muted-foreground">Agent access</div>
+          <div className="text-xs uppercase tracking-wide text-muted-foreground">Custody</div>
           <div
             className={cn(
               "mt-1.5 inline-flex items-center gap-1.5 text-sm font-medium",
-              agentApproved ? "text-success" : "text-muted-foreground",
+              vaultExists ? "text-success" : "text-muted-foreground",
             )}
           >
             <span
               className={cn(
                 "h-2 w-2 rounded-full",
-                agentApproved ? "bg-success" : "bg-muted-foreground/40",
+                vaultExists ? "bg-success" : "bg-muted-foreground/40",
               )}
               aria-hidden
             />
-            {agentApproved ? "Authorized" : "Off"}
+            {vaultExists ? "Your vault" : "No vault yet"}
           </div>
           <div className="mt-1 text-xs text-muted-foreground">
-            {agentApproved ? "Can trade for you — never withdraw" : "No trading permission granted"}
+            {vaultExists ? "Only you can withdraw" : "Create one to start copying"}
           </div>
         </div>
       </CardContent>
@@ -169,23 +183,56 @@ function OverviewStrip({
 }
 
 function DashboardLive() {
-  const { address } = useAccount();
-  const { subs, loading } = useMySubscriptions();
-  const bal = useHlBalance(address);
-  const approval = useAgentApproval(address);
-  // Only the trades the agent placed — fills from when copy-trading was authorized onward, not the
-  // follower's own prior history. See useHlPositions / useAgentApproval.
-  const positions = useHlPositions(address, approval.copyTradingSince);
-  const { revoke } = useRevokeAgent();
+  const net = useNetwork();
+  const { subs, loading } = useMyFlareSubscriptions();
+  const vault = useFlareVault();
+  const wallet = useFlareWallet();
+  // Every trade is a `Swapped` event on the follower's OWN vault — the results are public and
+  // verifiable while the strategy that produced them is not.
+  const { trades, loading: tradesLoading } = useFlareVaultTrades(vault.vault);
 
   return (
     <>
       <OverviewStrip
-        usdc={bal.usdc}
-        balLoading={bal.loading}
+        vaultFxrp={formatToken(vault.fxrp)}
+        balLoading={vault.loading}
         copying={subs.length}
-        agentApproved={Boolean(approval.approved)}
+        vaultExists={vault.exists}
+        explorerUrl={vault.vault ? `${env.explorers.flare}/address/${vault.vault}` : undefined}
       />
+
+      <section className="animate-enter" style={{ animationDelay: "90ms" }}>
+        <NetworkSwitchPrompt
+          requiredChain="flare"
+          current={net.current}
+          onSwitch={() => net.switchTo("flare")}
+        >
+          <VaultCard
+            vault={vault.vault}
+            fxrp={formatToken(vault.fxrp)}
+            quote={formatToken(vault.quote)}
+            quoteSymbol={QUOTE_SYMBOL}
+            walletFxrp={formatToken(wallet.fxrp)}
+            explorerBase={env.explorers.flare}
+            busy={vault.creating || vault.depositing || vault.withdrawing}
+            onCreateAndFund={async (amount) => {
+              await vault.createAndFund({ fxrpAmount: amount });
+              await wallet.refresh();
+              toast.success(`Vault created and funded with ${amount} FXRP`);
+            }}
+            onDeposit={async (amount) => {
+              await vault.deposit({ amount });
+              await wallet.refresh();
+              toast.success(`Deposited ${amount} FXRP`);
+            }}
+            onWithdraw={async (amount) => {
+              await vault.withdraw({ amount });
+              await wallet.refresh();
+              toast.success(`Withdrew ${amount} FXRP`);
+            }}
+          />
+        </NetworkSwitchPrompt>
+      </section>
 
       {/* Active subscriptions */}
       <section className="animate-enter space-y-3" style={{ animationDelay: "120ms" }}>
@@ -217,30 +264,12 @@ function DashboardLive() {
         )}
       </section>
 
-      {/* Recent copied trades (results only — never the strategy). Shown only once the agent is
-          authorized: before that no copy trade can exist, and we never surface the follower's own
-          manual history here. */}
-      {approval.approved && positions.positions.length > 0 && (
+      {/* Copied trades — results only, never the strategy. Every row is a `Swapped` event from this
+          follower's own vault, so it is publicly auditable without revealing what drove it. */}
+      {trades.length > 0 && (
         <section className="animate-enter space-y-3" style={{ animationDelay: "180ms" }}>
-          <h2 className="text-sm font-medium text-muted-foreground">Recent copied trades</h2>
-          <PositionsTable positions={positions.positions} loading={positions.loading} />
-        </section>
-      )}
-
-      {/* Danger zone — global kill switch. Per-leader cancel is on each row above; this stops
-          ALL copy-trading at once by revoking the shared agent's permission. */}
-      {approval.approved && (
-        <section
-          className="animate-enter space-y-3 border-t border-border pt-6"
-          style={{ animationDelay: "240ms" }}
-        >
-          <RevokeAllControl
-            onRevoke={async () => {
-              await revoke();
-              await approval.refetch();
-              toast.success("Copy-trading access revoked");
-            }}
-          />
+          <h2 className="text-sm font-medium text-muted-foreground">Copied trades</h2>
+          <PositionsTable positions={trades.map(tradeToRow)} loading={tradesLoading} />
         </section>
       )}
     </>
@@ -252,8 +281,33 @@ function pct(v: number | null) {
   return `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
 }
 
-function SubscriptionRow({ sub }: { sub: MySubscription }) {
-  const s = useSubscription(sub.leader.id as Hex);
+/**
+ * A vault `Swapped` event as a dashboard row. `tokenIn == quote` means an entry (spent testUSD to buy
+ * FXRP); the other direction is an exit. Deliberately shows amounts and the tx and nothing else — the
+ * take-profit and stop-loss that decided this trade are not ours to display.
+ */
+function tradeToRow(t: {
+  id: string;
+  txHash: string | null;
+  isEntry: boolean;
+  amountIn: bigint;
+  received: bigint;
+}) {
+  return {
+    id: t.id,
+    pair: t.isEntry ? `${QUOTE_SYMBOL} → FXRP` : `FXRP → ${QUOTE_SYMBOL}`,
+    amountIn: `${formatToken(t.amountIn)} ${t.isEntry ? QUOTE_SYMBOL : "FXRP"}`,
+    currentValue: `${formatToken(t.received)} ${t.isEntry ? "FXRP" : QUOTE_SYMBOL}`,
+    pnlPct: 0,
+    pnlUsd: "—",
+    openedAt: new Date().toISOString(),
+    status: (t.isEntry ? "open" : "closed") as "open" | "closed",
+    txUrl: t.txHash ? `${env.explorers.flare}/tx/${t.txHash}` : "#",
+  };
+}
+
+function SubscriptionRow({ sub }: { sub: MyFlareSubscription }) {
+  const { cancel } = useCancelFlareSubscription();
   const qc = useQueryClient();
   const [pending, setPending] = useState(false);
   const ret = sub.leader.performance.verifiedReturnPct;
@@ -261,8 +315,8 @@ function SubscriptionRow({ sub }: { sub: MySubscription }) {
   async function handleCancel() {
     setPending(true);
     try {
-      await s.cancel();
-      await qc.invalidateQueries({ queryKey: ["my-subscriptions"] });
+      await cancel(sub.leader.id as Hex);
+      await qc.invalidateQueries({ queryKey: ["my-flare-subscriptions"] });
       toast.success(`Unsubscribed from ${sub.leader.displayName}`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Couldn't unsubscribe");
