@@ -13,6 +13,7 @@
  * Env:
  *   EXT_PROXY_URL             the enclave proxy (to read its current identity)
  *   FLARE_VAULT_FACTORY       CopyVaultFlareFactory
+ *   FLARE_EXTENSION_ID        our extension id (decimal), to inspect its registered machines
  *   DEPLOYMENT_PRIVATE_KEY    the factory admin / vault owner (only needed to APPLY fixes)
  *   APPLY=1                   perform the fixes; without it this is a read-only report
  *
@@ -54,6 +55,24 @@ const VAULT_ABI = parseAbi([
   "function owner() view returns (address)",
   "function setTeeAddress(address)",
 ]);
+
+/** FlareTeeManager (FCC diamond) — the registry that decides whether an instruction reaches us. */
+const TEE_MANAGER = (process.env.FLARE_TEE_MANAGER ??
+  "0x1a9C4A0f9D76c0b1D91d22E24E573a9b377618aE") as Address;
+
+const TEE_MANAGER_ABI = parseAbi([
+  "function getActiveTeeMachines(uint256 extensionId) view returns (address[] teeIds, string[] urls)",
+  "function getTeeMachineStatus(address teeId) view returns (uint8)",
+]);
+
+/** ITeeMachineRegistry.TeeStatus. Only PRODUCTION (2) receives dispatched instructions. */
+const TEE_STATUS = ["NONE", "INITIALIZED", "PRODUCTION", "SUSPENDED", "PAUSED", "BANNED"] as const;
+
+/** The public FTDC proxies, for cross-checking an instruction that never showed up. */
+const FTDC_PROXIES = [
+  "https://tee-proxy-coston2-1.flare.rocks",
+  "https://tee-proxy-coston2-2.flare.rocks",
+];
 
 const GREEN = "\x1b[32m";
 const YELLOW = "\x1b[33m";
@@ -103,6 +122,80 @@ async function main(): Promise<void> {
     dim("  cd fce-sigmax && bash scripts/start-services.sh && bash scripts/post-build.sh");
     process.exit(1);
   }
+
+  // ------------------------------------------------- 1b. the machines registered for this extension
+  /*
+   * An on-chain dispatch is NOT delivery. A dispatch picks ONE machine from those registered under the
+   * extension, and providers then POST straight to that machine's registered URL. So a single stale
+   * registration alongside a live one turns into intermittent, apparently random silence — every other
+   * signal is routed to a machine that no longer exists.
+   *
+   * That is what `flare-e2e-demo.ts` works around by republishing up to 20 times until it happens to be
+   * routed to the live machine. The actual fix is to PAUSE the stale identity, and this check is what
+   * makes the situation visible instead of guessable.
+   */
+  const extensionId = process.env.FLARE_EXTENSION_ID;
+  if (!extensionId) {
+    dim("set FLARE_EXTENSION_ID to also audit the machines registered for this extension");
+  } else {
+    try {
+      const [teeIds, urls] = await publicClient.readContract({
+        address: TEE_MANAGER,
+        abi: TEE_MANAGER_ABI,
+        functionName: "getActiveTeeMachines",
+        args: [BigInt(extensionId)],
+      });
+
+      if (teeIds.length === 0) {
+        bad(`extension ${extensionId} has NO registered machines — nothing can be dispatched to`);
+        dim("  cd fce-sigmax && bash scripts/post-build.sh");
+      } else {
+        const statuses = await Promise.all(
+          teeIds.map((id) =>
+            publicClient
+              .readContract({
+                address: TEE_MANAGER,
+                abi: TEE_MANAGER_ABI,
+                functionName: "getTeeMachineStatus",
+                args: [id],
+              })
+              .catch(() => 0),
+          ),
+        );
+
+        const live = teeIds.filter((id, i) => statuses[i] === 2 && id.toLowerCase() === liveTee.toLowerCase());
+        for (const [i, id] of teeIds.entries()) {
+          const status = TEE_STATUS[statuses[i] ?? 0] ?? "UNKNOWN";
+          const isLive = id.toLowerCase() === liveTee.toLowerCase();
+          const line = `${id}  ${status.padEnd(12)} ${urls[i] ?? ""}`;
+          if (isLive && statuses[i] === 2) ok(`machine ${line}  ← the running enclave`);
+          else if (isLive) warn(`machine ${line}  ← the running enclave, but not PRODUCTION`);
+          else warn(`machine ${line}  ← STALE (a dispatch routed here is never answered)`);
+        }
+
+        if (teeIds.length > 1) {
+          bad(`${teeIds.length} machines are active for this extension — dispatch picks one at random`);
+          dim("Pause every identity except the running one. Old registrations do not expire on their own,");
+          dim("and each restart leaves another behind, so the odds of a silent failure only grow.");
+        }
+        if (live.length === 0) {
+          bad("the running enclave is NOT an active PRODUCTION machine — instructions will not arrive");
+          dim("  cd fce-sigmax && bash scripts/post-build.sh   # re-register this identity");
+        }
+      }
+    } catch (e) {
+      warn(`could not read the machine registry: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  /*
+   * Availability freshness is a delivery requirement we cannot read from the registry interface: a
+   * machine must have passed an availability check within the last ~6 hours to be dispatched to. There
+   * is no public getter for it, so this is a reminder rather than a check — and it is the most common
+   * reason a correctly-registered PRODUCTION machine still receives nothing after sitting idle.
+   */
+  dim("Delivery also requires an availability check newer than ~6h. A machine left idle overnight");
+  dim("stops receiving instructions even while it still reads as PRODUCTION.");
 
   // ---------------------------------------------------------------- 2. the factory
   const factoryTee = await publicClient.readContract({
@@ -226,6 +319,17 @@ async function main(): Promise<void> {
   if (!process.env.SIGMAX_HL_PER_TRADE_CAP || process.env.SIGMAX_HL_PER_TRADE_CAP === "0") {
     warn("SIGMAX_HL_PER_TRADE_CAP is 0/unset — the venue is disabled by design (fails closed)");
   }
+
+  // ---------------------------------------------------------------- 6. where to look next
+  console.log("\nif an instruction dispatches but never arrives:");
+  dim("A dispatch event is not delivery. Providers POST to the machine's registered URL (:6664");
+  dim("/instruction) — the proxy does not pull from the indexer, so nothing retries for you.");
+  dim(`  proxy /info                     ${proxyUrl}/info`);
+  dim(`  per-instruction status          ${proxyUrl}/action/status/<epoch>/<id>`);
+  dim("  indexer health                  GET :6661/ready   (503 = genuinely behind)");
+  for (const p of FTDC_PROXIES) dim(`  public FTDC proxy               ${p}`);
+  dim("A 404 there does not mean the proxy is down — for a recent action it usually means the");
+  dim("instruction never reached it, which points back at machine status or availability above.");
 
   console.log("");
 }
