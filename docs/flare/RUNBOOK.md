@@ -60,20 +60,42 @@ Fixed by **rebalancing the pool toward the oracle** (a 0.05 testUSD buy lifted t
 it to paper over a mispriced pool would have traded away the guarantee to make a demo pass. On thin
 liquidity, budget for fee + impact on top of the oracle gap or nothing ever executes.
 
-**Not done — two items, for different reasons:**
+### Retiring a stale identity — `pause(address)`
 
-1. **The stale identity `0x736148d4…` is still registered `PRODUCTION`**, so the extension now has TWO
-   active machines on the same URL and every dispatch picks one at random. The live run above was routed
-   correctly on the first attempt, but that is luck, not design. There is **no pause command in the
-   scaffold** (`register-tee` exposes only `r`/`R`/`a`/`p`, and the tooling has no status setter), so this
-   needs either a call the scaffold does not wrap or a word with the FCC team. `resync` flags it loudly.
+Every restart mints a new TEE identity and leaves the previous one `PRODUCTION`, and dispatch picks one
+at random. Measured on Coston2, that is not a coin flip in practice: **six consecutive publishes were all
+routed to the retired machine.** The scaffold has no pause command and `ITeeMachineRegistry` exposes only
+view functions, so it looks unfixable — but the deployed manager does have it. Its real ABI is in the Go
+module cache and carries nine write functions, `pause(address)` among them:
 
-2. **The Hyperliquid venue is configured but not exercised.** `SIGMAX_HL_PER_TRADE_CAP` is now set
-   ($15/trade), but the enclave reads its env once at boot, so it needs a restart to pick it up — and a
-   restart mints a new identity, costing the working Flare setup above. Deliberately not done: the trade
-   is a working venue for an unproven one, because Hyperliquid execution *also* needs a funded testnet
-   account and a follower `approveAgent`, and funding an exchange account is the one thing here I cannot
-   do at all. Do the restart and the injection together, then re-run `resync`.
+```
+~/go/pkg/mod/github.com/flare-foundation/go-flare-common@*/pkg/contracts/tee/machinemanager/machinemanager.abi
+  ban · confirmOwnership · pause · pauseWithProof · proposeNewOwner
+  register · toProduction · unban · updateTeeMachineSettings
+```
+
+Call it as the machine's owner. `0x736148d4…` → `PAUSED` (tx `0xe6ed2f76…`), after which
+`getActiveTeeMachines(66127)` returns exactly one machine and routing was correct first try on every
+subsequent run. Do this after each re-registration.
+
+### Keep the pool deep enough for the FTSO bound
+
+Each demo sells 0.025 FXRP. Against ~8 units of liquidity that moves the price ~0.3%, so a handful of runs
+walks the pool out of the 1% `minOut` band and every swap starts reverting `SwapFailed()` — which reads
+like a broken enclave and is not one. Depth is the fix, not a wider slippage bound: the pool now holds
+**~12 units a side**, where the same trade moves it ~0.19%.
+
+Note BlazeSwap's `addLiquidity` takes two extra `feeBips` params; the stock Uniswap-V2 selector reverts.
+`seed-flare-pool.ts` already documents this.
+
+**Not done — needs something I cannot supply:**
+
+**The Hyperliquid venue is configured but not exercised.** `SIGMAX_HL_PER_TRADE_CAP` is set ($15/trade),
+but the enclave reads env once at boot, so it needs a restart — which mints a new identity and costs the
+working Flare setup above. Deliberately not done, because the payoff is not there either: Hyperliquid
+execution *also* needs a funded exchange testnet account and a follower `approveAgent`, and funding an
+exchange account is the one prerequisite no code supplies. Do the restart, the injection and `resync`
+together, and remember to `pause` the identity you retire.
 
 ---
 

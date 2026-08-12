@@ -70,6 +70,8 @@ follower vault 0xAD31372f…
   before   0.500000 FXRP    0.000000 testUSD
   after    0.475000 FXRP    0.025234 testUSD
            └─ sold by a signal nobody outside the enclave could read
+
+  (re-run repeatedly since; latest relay 0xc07cb348…, one machine registered, routed first try)
 ```
 
 | Step | On-chain evidence |
@@ -391,10 +393,11 @@ enclave → sign → verify on-chain → swap — with the transactions linked a
   re-attested enclave and made the leaderboard hang. Redeploying is one command
   (`pnpm --filter @sigmax/agent deploy:flare`), and it refuses to run while the old factory holds funded
   vaults, because `vaultOf` does not migrate.
-- **A stale TEE identity is still registered.** The extension has two `PRODUCTION` machines on the same
-  URL, so each dispatch picks one at random; the run above was routed correctly first try, but that is
-  luck. The scaffold ships no pause command, so retiring it needs a call it does not wrap. `resync` flags
-  this loudly — see §0a of the [runbook](docs/flare/RUNBOOK.md).
+- **Retired TEE identities must be paused after every restart.** A restart mints a new identity and
+  leaves the old one `PRODUCTION`; dispatch then picks at random, and measured on Coston2 six consecutive
+  publishes all went to the dead one. The manager's `pause(address)` fixes it (the scaffold does not wrap
+  it — the ABI is in the Go module cache), and the publish path retries regardless. See §0a of the
+  [runbook](docs/flare/RUNBOOK.md).
 - **Hyperliquid is configured but unexercised.** The per-trade cap is set, but the enclave reads env only
   at boot and a restart would mint a new identity — costing the working Flare setup. It also needs a
   funded exchange testnet account, which is the one prerequisite no amount of code supplies.
