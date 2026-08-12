@@ -63,6 +63,27 @@ describe("per-follower agent key derivation", () => {
     expect(second).toBe(first);
   });
 
+  /**
+   * The cross-implementation contract. `@sigmax/enclave-crypto` carries a vendored copy of this
+   * derivation so a follower's BROWSER can compute the address it is about to approve, and its test
+   * asserts these exact same values (`packages/enclave-crypto/test/hlAgentAddress.test.ts`).
+   *
+   * If this fails, do not update the numbers — find which of the two copies moved. A silent drift means
+   * followers approve an address the enclave never signs with, and every order is rejected as coming
+   * from an unapproved signer.
+   */
+  it("matches the vectors pinned by the browser-side copy", () => {
+    expect(bytesToHex(MASTER_PUB)).toBe(
+      "0x02466d7fcae563e5cb09a0d1870bb580344804617879a14949cf22285f1bae3f27",
+    );
+    expect(deriveAgentAddress(MASTER_PUB, "0x1111111111111111111111111111111111111111")).toBe(
+      "0x1039D231DEbA92c8EB5083A8dAc49236F5459D57",
+    );
+    expect(deriveAgentAddress(MASTER_PUB, "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")).toBe(
+      "0x80FF2130Fe204a0818B49EaCD370931ae9d54188",
+    );
+  });
+
   it("a different master secret yields different agent addresses", () => {
     const other = hexToBytes("0x3333333333333333333333333333333333333333333333333333333333333333");
     expect(deriveAgentAddress(masterPublicKey(other), FOLLOWERS[0]!)).not.toBe(

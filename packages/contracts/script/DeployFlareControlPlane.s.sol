@@ -18,10 +18,13 @@ contract DeployFlareControlPlane is Script {
         uint256 deployerKey = vm.envUint("PRIVATE_KEY");
         address teeAddress = vm.envAddress("TEE_ADDRESS");
         address treasury = vm.envAddress("PLATFORM_TREASURY");
+        // Who may rotate `teeAddress` when the enclave re-attests. Defaults to the deployer; renounce
+        // with `transferAdmin(address(0))` once the identity is stable under real attestation.
+        address factoryAdmin = vm.envOr("FACTORY_ADMIN", vm.addr(deployerKey));
 
         vm.startBroadcast(deployerKey);
         TeeSigVerifier verifier = new TeeSigVerifier();
-        CopyVaultFlareFactory factory = new CopyVaultFlareFactory(address(verifier), teeAddress);
+        CopyVaultFlareFactory factory = new CopyVaultFlareFactory(address(verifier), teeAddress, factoryAdmin);
         SignalRegistry signals = new SignalRegistry();
         SubscriptionRegistry subs = new SubscriptionRegistry(treasury);
         vm.stopBroadcast();
@@ -32,5 +35,6 @@ contract DeployFlareControlPlane is Script {
         console2.log("SubscriptionRegistry: ", address(subs));
         console2.log("teeAddress:           ", teeAddress);
         console2.log("platformTreasury:     ", treasury);
+        console2.log("factoryAdmin:         ", factoryAdmin);
     }
 }

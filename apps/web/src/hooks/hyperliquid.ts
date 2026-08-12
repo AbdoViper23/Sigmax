@@ -1,9 +1,10 @@
-import { useWalletClient } from "wagmi";
+import { useAccount, useWalletClient } from "wagmi";
 import { useQuery } from "@tanstack/react-query";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import type { Address } from "viem";
 import { ExchangeClient, HttpTransport, InfoClient } from "@nktkas/hyperliquid";
 import type { AbstractWallet } from "@nktkas/hyperliquid/signing";
+import { deriveHlAgentAddress } from "@sigmax/enclave-crypto";
 import { env } from "@/lib/env";
 import type { PositionRow } from "@/components/sigmax/PositionsTable";
 import {
@@ -46,15 +47,52 @@ export function useHlBalance(address?: Address) {
   return { usdc: q.data ?? 0, loading: q.isLoading, refetch: q.refetch };
 }
 
-/** Whether the configured platform agent is currently approved (and not expired) on the account. */
-export function useAgentApproval(address?: Address) {
+/**
+ * The agent address THIS follower must approve, derived in the browser from the enclave's published
+ * master public key.
+ *
+ * Two things make this the right shape. First, each follower gets their own agent address: Hyperliquid
+ * tracks nonces per signer and keeps only the 100 highest, so a single shared agent would put every
+ * follower in one window and start dropping orders under fan-out. Second, the derivation is
+ * recomputed here rather than fetched — the follower is about to grant an address permission to trade
+ * on their account, and verifying that address beats trusting a server that returned it.
+ *
+ * Returns `null` while the enclave has no key injected, which is also the honest answer: until then
+ * there is no agent to approve and Hyperliquid signals are rejected.
+ */
+export function useHlAgentAddress(address?: Address) {
   const q = useQuery({
-    queryKey: ["hl-agent-approval", address, env.hlAgentAddress, env.hlTestnet],
-    enabled: Boolean(address && env.hlAgentAddress),
+    queryKey: ["hl-agent-address", address, env.flareProxyUrl],
+    enabled: Boolean(address && env.flareProxyUrl),
+    staleTime: 60_000,
+    queryFn: async (): Promise<{ agentAddress: string; masterPubkey: string } | null> => {
+      const res = await fetch(`${env.flareProxyUrl}/state`);
+      if (!res.ok) return null;
+      const body = (await res.json()) as { state?: { hlAgentMasterPubkey?: string | null } };
+      const masterPubkey = body.state?.hlAgentMasterPubkey;
+      if (!masterPubkey) return null; // no key injected in the enclave yet
+      return { agentAddress: deriveHlAgentAddress(masterPubkey, address!), masterPubkey };
+    },
+  });
+
+  return {
+    agentAddress: q.data?.agentAddress,
+    masterPubkey: q.data?.masterPubkey,
+    loading: q.isLoading,
+  };
+}
+
+/** Whether this follower's derived agent is currently approved (and not expired) on their account. */
+export function useAgentApproval(address?: Address) {
+  const { agentAddress } = useHlAgentAddress(address);
+
+  const q = useQuery({
+    queryKey: ["hl-agent-approval", address, agentAddress, env.hlTestnet],
+    enabled: Boolean(address && agentAddress),
     refetchInterval: POLL_MS,
     queryFn: async () => {
       const agents = await infoClient().extraAgents({ user: address! });
-      const target = env.hlAgentAddress!.toLowerCase();
+      const target = agentAddress!.toLowerCase();
       const agent = agents.find(
         (a) => a.address.toLowerCase() === target && a.validUntil > Date.now(),
       );
@@ -145,19 +183,31 @@ function exchangeFrom(wallet: HlWallet) {
   return new ExchangeClient({ transport: new HttpTransport({ isTestnet: env.hlTestnet }), wallet });
 }
 
-/** Authorize the platform agent to trade on the follower's behalf (wallet signs `approveAgent`). */
+/**
+ * Authorize this follower's own enclave-derived agent to trade for them (wallet signs `approveAgent`).
+ *
+ * The approved key lives inside the TEE and can only place spot orders — Hyperliquid itself rejects a
+ * withdrawal signed by an agent key, so this permission cannot move funds out. It expires on its own
+ * and is revocable at any time.
+ */
 export function useApproveAgent() {
+  const { address } = useAccount();
   const { data: walletClient } = useWalletClient();
+  const { agentAddress } = useHlAgentAddress(address);
+
   const approve = async (): Promise<void> => {
     if (!walletClient) throw new Error("Connect your wallet first");
-    if (!env.hlAgentAddress) throw new Error("Copy-trading agent is not configured");
+    if (!agentAddress) {
+      throw new Error("The enclave has no trading key yet — copy-trading is not available");
+    }
     const validUntil = Date.now() + APPROVAL_TTL_MS;
     await exchangeFrom(walletClient as unknown as HlWallet).approveAgent({
-      agentAddress: env.hlAgentAddress,
+      agentAddress: agentAddress as Address,
       agentName: `${AGENT_LABEL} valid_until ${validUntil}`,
     });
   };
-  return { approve };
+
+  return { approve, agentAddress };
 }
 
 /**

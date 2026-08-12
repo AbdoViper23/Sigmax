@@ -22,6 +22,7 @@ import {
 import { SubscriptionStatusBadge } from "@/components/sigmax/SubscriptionStatusBadge";
 import { PositionsTable } from "@/components/sigmax/PositionsTable";
 import { VaultCard } from "@/components/sigmax/VaultCard";
+import { AuthorizeAgentCard } from "@/components/sigmax/AuthorizeAgentCard";
 import { NetworkSwitchPrompt } from "@/components/sigmax/NetworkSwitchPrompt";
 import { cn } from "@/lib/utils";
 import { useNetwork } from "@/hooks/useNetwork";
@@ -34,6 +35,7 @@ import {
   useMyFlareSubscriptions,
   type MyFlareSubscription,
 } from "@/hooks/flareControlPlane";
+import { useAgentApproval, useApproveAgent, useHlAgentAddress } from "@/hooks/hyperliquid";
 import { env } from "@/lib/env";
 
 export const Route = createFileRoute("/follower")({
@@ -184,9 +186,14 @@ function OverviewStrip({
 
 function DashboardLive() {
   const net = useNetwork();
+  const { address } = useAccount();
   const { subs, loading } = useMyFlareSubscriptions();
   const vault = useFlareVault();
   const wallet = useFlareWallet();
+  // Off-chain venue (Hyperliquid). Present only when the enclave has a trading key injected.
+  const hlAgent = useHlAgentAddress(address);
+  const hlApproval = useAgentApproval(address);
+  const { approve: approveHlAgent } = useApproveAgent();
   // Every trade is a `Swapped` event on the follower's OWN vault — the results are public and
   // verifiable while the strategy that produced them is not.
   const { trades, loading: tradesLoading } = useFlareVaultTrades(vault.vault);
@@ -214,7 +221,8 @@ function DashboardLive() {
             quoteSymbol={QUOTE_SYMBOL}
             walletFxrp={formatToken(wallet.fxrp)}
             explorerBase={env.explorers.flare}
-            busy={vault.creating || vault.depositing || vault.withdrawing}
+            busy={vault.creating || vault.depositing || vault.withdrawing || vault.repointing}
+            teeStale={vault.teeStale}
             onCreateAndFund={async (amount) => {
               await vault.createAndFund({ fxrpAmount: amount });
               await wallet.refresh();
@@ -229,6 +237,10 @@ function DashboardLive() {
               await vault.withdraw({ amount });
               await wallet.refresh();
               toast.success(`Withdrew ${amount} FXRP`);
+            }}
+            onRepointTee={async () => {
+              await vault.repointTee();
+              toast.success("Vault now trusts the current enclave");
             }}
           />
         </NetworkSwitchPrompt>
@@ -263,6 +275,24 @@ function DashboardLive() {
           subs.map((s) => <SubscriptionRow key={s.leader.id} sub={s} />)
         )}
       </section>
+
+      {/* The off-chain venue's onboarding, shown ONLY once the enclave actually holds a trading key.
+          Its key is memory-only and cleared by a restart, so gating on the derived address means the
+          card never invites a follower to authorize something that cannot yet trade. */}
+      {hlAgent.agentAddress && (
+        <section className="animate-enter" style={{ animationDelay: "150ms" }}>
+          <AuthorizeAgentCard
+            approved={hlApproval.approved}
+            loading={hlApproval.loading}
+            agentAddress={hlAgent.agentAddress}
+            onAuthorize={async () => {
+              await approveHlAgent();
+              await hlApproval.refetch();
+              toast.success("Copy-trading authorized");
+            }}
+          />
+        </section>
+      )}
 
       {/* Copied trades — results only, never the strategy. Every row is a `Swapped` event from this
           follower's own vault, so it is publicly auditable without revealing what drove it. */}

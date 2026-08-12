@@ -6,27 +6,74 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {CopyVaultFlare} from "./CopyVaultFlare.sol";
 
 /// @title CopyVaultFlareFactory
-/// @notice Deploys one deterministic (CREATE2) CopyVaultFlare per follower. Configured once with the
-///         platform's TEE verifier + attested TEE address; each follower gets a vault they own.
+/// @notice Deploys one deterministic (CREATE2) CopyVaultFlare per follower. Each follower gets a vault
+///         they own; the factory only supplies the TEE verifier + the currently attested TEE address.
 contract CopyVaultFlareFactory {
     using SafeERC20 for IERC20;
 
     address public immutable teeVerifier;
-    address public immutable teeAddress;
+
+    /// @notice The TEE identity stamped into newly created vaults.
+    ///
+    /// @dev NOT immutable, and the reason matters. An enclave that re-attests gets a new signing
+    ///      identity, and with an immutable value here the only way to follow it was to redeploy the
+    ///      factory — which moves `vaultOf` to a fresh contract and strands every existing follower's
+    ///      vault (and its funds) behind an address the app no longer reads. Losing track of user
+    ///      funds to work around a config change is not an acceptable trade.
+    ///
+    ///      TRUST BOUNDARY, stated plainly: `admin` can change which TEE identity *future* vaults
+    ///      trust. It cannot touch an existing vault — each one stores its own `teeAddress` from
+    ///      construction and only its owner may call `setTeeAddress`. So this widens the admin's reach
+    ///      from deploy-time to any time for NEW vaults, and not at all for existing ones. Every
+    ///      change is evented so a follower can verify what their vault was created against before
+    ///      funding it.
+    address public teeAddress;
+
+    /// @notice Can rotate `teeAddress`. Set to address(0) to make the current value permanent.
+    address public admin;
 
     /// @notice follower => their vault (address(0) if none yet).
     mapping(address => address) public vaultOf;
 
     event VaultCreated(address indexed owner, address vault);
     event VaultFunded(address indexed owner, address indexed vault, address indexed token, uint256 amount);
+    event TeeAddressUpdated(address indexed previous, address indexed current);
+    event AdminTransferred(address indexed previous, address indexed current);
 
     error VaultExists();
     error TokenNotWhitelisted();
     error NothingToDeposit();
+    error NotAdmin();
+    error ZeroTeeAddress();
 
-    constructor(address _teeVerifier, address _teeAddress) {
+    modifier onlyAdmin() {
+        if (msg.sender != admin) revert NotAdmin();
+        _;
+    }
+
+    constructor(address _teeVerifier, address _teeAddress, address _admin) {
         teeVerifier = _teeVerifier;
         teeAddress = _teeAddress;
+        admin = _admin;
+        emit TeeAddressUpdated(address(0), _teeAddress);
+        emit AdminTransferred(address(0), _admin);
+    }
+
+    /// @notice Point newly created vaults at a re-attested enclave identity.
+    /// @dev Existing vaults are untouched; their owners repoint their own via `CopyVaultFlare.setTeeAddress`.
+    function setTeeAddress(address _teeAddress) external onlyAdmin {
+        if (_teeAddress == address(0)) revert ZeroTeeAddress();
+        emit TeeAddressUpdated(teeAddress, _teeAddress);
+        teeAddress = _teeAddress;
+    }
+
+    /// @notice Hand over or renounce admin. Passing address(0) freezes `teeAddress` forever.
+    /// @dev The renounce path is the point: once the enclave identity is stable (real attestation, not
+    ///      a simulated TEE that re-keys on restart), the rotation power should be given up rather
+    ///      than left lying around.
+    function transferAdmin(address _admin) external onlyAdmin {
+        emit AdminTransferred(admin, _admin);
+        admin = _admin;
     }
 
     /// @notice Create the caller's non-custodial vault (one per address). Reverts if it already exists.
