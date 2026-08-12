@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SignalChart } from "@/components/sigmax/SignalChart";
+import { VenueTrustPanel } from "@/components/sigmax/VenueTrustPanel";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -144,6 +145,23 @@ function Index() {
         </div>
       </section>
 
+      {/* ---------- Venues ---------- */}
+      {/* The dual-venue story belongs on the landing page, not buried in the dashboard: "one enclave,
+          two venues" is the architectural claim, and stating the difference in guarantee openly is more
+          convincing than implying they are identical. */}
+      <section className="border-t border-border">
+        <div className="mx-auto max-w-3xl px-4 py-16 md:py-20">
+          <SectionHead
+            eyebrow="Two venues"
+            title="One sealed signal, wherever it settles"
+            body="The same encrypted signal and the same attested enclave, on-chain or on an order book. What differs is what stops a bad trade — and we say which is which."
+          />
+          <div className="mt-10">
+            <VenueTrustPanel />
+          </div>
+        </div>
+      </section>
+
       {/* ---------- For leaders / followers ---------- */}
       <section className="border-t border-border bg-card/40">
         <div className="mx-auto grid max-w-6xl gap-4 px-4 py-16 md:grid-cols-2 md:py-20">
@@ -266,11 +284,21 @@ function SealedSignalCard() {
   );
 }
 
-function SectionHead({ eyebrow, title }: { eyebrow: string; title: string }) {
+function SectionHead({
+  eyebrow,
+  title,
+  body,
+}: {
+  eyebrow: string;
+  title: string;
+  /** Optional lede. Constrained to ~65ch so a long line never becomes hard to track. */
+  body?: string;
+}) {
   return (
     <div>
       <div className="text-xs font-medium uppercase tracking-wider text-primary">{eyebrow}</div>
       <h2 className="mt-2 text-3xl font-semibold tracking-tight md:text-4xl">{title}</h2>
+      {body && <p className="mt-3 max-w-[65ch] text-muted-foreground">{body}</p>}
     </div>
   );
 }

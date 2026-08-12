@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 import { useHlMarkets } from "@/hooks/hyperliquid";
 import { displayName, type MarketInfo } from "@/lib/hyperliquid/markets";
 import type { SignalVenueT } from "@sigmax/shared";
+import { VenueSummary, asBadgeVenue, type BadgeVenue } from "./VenueBadge";
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -70,17 +71,15 @@ const initialState = {
   expiresInHours: 24,
 };
 
-const VENUES: { value: SignalVenueT; label: string }[] = [
+/**
+ * The venues this extension actually executes. Arbitrum is deliberately absent: the enclave rejects it,
+ * so offering it would let a leader publish a signal that can never fill. A venue list is a promise
+ * about what will execute, not a menu of everything the schema can encode.
+ */
+const VENUES: { value: BadgeVenue; label: string }[] = [
   { value: "flare", label: "Flare (FXRP)" },
   { value: "hyperliquid", label: "Hyperliquid" },
-  { value: "arbitrum", label: "Arbitrum" },
 ];
-
-const VENUE_HINTS: Record<SignalVenueT, string> = {
-  flare: "Flare Coston2 — decrypted inside the TEE, swapped in each follower's CopyVault with an FTSO-bounded floor.",
-  hyperliquid: "Hyperliquid spot — pick from every USDC market.",
-  arbitrum: "Arbitrum — executes in each follower's CopyVault.",
-};
 
 const EXPIRY_PRESETS = [6, 24, 48] as const;
 
@@ -239,7 +238,9 @@ export function PublishSignalForm({
                   options={VENUES}
                 />
               </div>
-              <p className="text-xs text-muted-foreground">{VENUE_HINTS[s.venue]}</p>
+              {/* Restating where this settles and what enforces it, at the moment of choosing —
+                  the two venues do not offer the same guarantee, so the choice is not cosmetic. */}
+              {asBadgeVenue(s.venue) && <VenueSummary venue={asBadgeVenue(s.venue)!} />}
             </div>
 
             {/* Market / token */}

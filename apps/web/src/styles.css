@@ -78,7 +78,7 @@
   --card-foreground: oklch(0.18 0.015 250);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.18 0.015 250);
-  --primary: oklch(0.55 0.13 165);
+  --primary: oklch(0.531 0.13 165);
   --primary-foreground: oklch(0.99 0 0);
   --secondary: oklch(0.96 0.005 250);
   --secondary-foreground: oklch(0.22 0.015 250);
@@ -90,17 +90,31 @@
   --destructive-foreground: oklch(0.99 0 0);
   --border: oklch(0.9 0.008 250);
   --input: oklch(0.9 0.008 250);
-  --ring: oklch(0.55 0.13 165);
+  --ring: oklch(0.531 0.13 165);
 
   /* Sigmax semantic */
-  --success: oklch(0.62 0.16 150);
-  --warning: oklch(0.74 0.15 75);
-  --danger: oklch(0.6 0.21 27);
-  --chain-story: oklch(0.6 0.18 290);
-  --chain-arbitrum: oklch(0.62 0.14 235);
+  /*
+   * Status + venue hues, tuned for LIGHT backgrounds by measurement, not by eye.
+   *
+   * These are used as small text (badges, inline status), so WCAG AA demands 4.5:1 — and the previous
+   * values did not come close: warning was 2.36:1 on a card and 2.27:1 on its own 5% tint, and every
+   * chain hue sat between 2.4:1 and 3.8:1. Small coloured text on a pale tint of itself is the exact
+   * pattern that looks fine to a designer on a good monitor and disappears for everyone else.
+   *
+   * Each lightness below is the LARGEST value that still clears 4.8:1 against its real composited
+   * background (the 10% self-tint for chain hues, the card for the rest) — 4.5 is the requirement, and
+   * the extra 0.3 is margin so a later tint tweak cannot quietly push a token under. The palette keeps
+   * as much of its original character as that allows. Dark mode overrides these in `.dark`.
+   */
+  --success: oklch(0.532 0.16 150);
+  --warning: oklch(0.557 0.15 75);
+  --danger: oklch(0.578 0.21 27);
+  --chain-story: oklch(0.538 0.18 290);
+  --chain-arbitrum: oklch(0.505 0.14 235);
   /* Flare brand coral — distinct from the violet/blue of the other two chains. */
-  --chain-flare: oklch(0.65 0.19 25);
-  --chain-hyperliquid: oklch(0.68 0.13 175);
+  --chain-flare: oklch(0.539 0.19 25);
+  /* Hyperliquid teal. Kept far from Flare's coral in hue so the two venues never read as the same. */
+  --chain-hyperliquid: oklch(0.491 0.13 175);
 
   --chart-1: oklch(0.55 0.13 165);
   --chart-2: oklch(0.62 0.14 235);
@@ -150,6 +164,22 @@
   --sidebar-accent-foreground: oklch(0.984 0.003 247.858);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.551 0.027 264.364);
+
+  /*
+   * Status + venue hues for DARK backgrounds — declared explicitly rather than inherited.
+   *
+   * They used to fall through from `:root`, which happened to pass on a dark card only by luck. That
+   * coupling meant any light-mode contrast fix silently darkened dark mode too, straight into failing.
+   * Stating both themes independently is what makes each one tunable. All measured ≥ 4.5:1 on `--card`
+   * and on their own 10% tint.
+   */
+  --success: oklch(0.72 0.16 150);
+  --warning: oklch(0.8 0.15 75);
+  --danger: oklch(0.7 0.19 27);
+  --chain-story: oklch(0.72 0.16 290);
+  --chain-arbitrum: oklch(0.72 0.13 235);
+  --chain-flare: oklch(0.72 0.17 25);
+  --chain-hyperliquid: oklch(0.75 0.12 175);
 }
 
 @layer base {
