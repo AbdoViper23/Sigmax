@@ -24,6 +24,8 @@ import { PositionsTable } from "@/components/sigmax/PositionsTable";
 import { VaultCard } from "@/components/sigmax/VaultCard";
 import { AuthorizeAgentCard } from "@/components/sigmax/AuthorizeAgentCard";
 import { NetworkSwitchPrompt } from "@/components/sigmax/NetworkSwitchPrompt";
+import { VenueSummary, VENUE_META, type BadgeVenue } from "@/components/sigmax/VenueBadge";
+import { VenueTrustPanel } from "@/components/sigmax/VenueTrustPanel";
 import { cn } from "@/lib/utils";
 import { useNetwork } from "@/hooks/useNetwork";
 import {
@@ -71,9 +73,11 @@ function DashboardPage() {
 }
 
 function ConnectPrompt() {
+  // Phrased for both venues: "your own vault or your own account" is the accurate union, and the
+  // withdrawal guarantee is the one property that holds identically on each.
   const points = [
-    "Every trade runs in your own account",
-    "The agent can trade for you — never withdraw",
+    "Every trade runs in your own vault or your own account",
+    "Nothing can withdraw your funds — only you",
     "Cancel or revoke access anytime",
   ];
   return (
@@ -97,6 +101,20 @@ function ConnectPrompt() {
         </Button>
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * The heading that opens a venue's section. Carries the venue badge plus the one line that matters
+ * there — where funds sit and what enforces the limits — so the trade-off is restated at the point of
+ * action rather than only in the comparison table further down.
+ */
+function VenueSectionHeading({ venue }: { venue: BadgeVenue }) {
+  return (
+    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+      <h2 className="text-sm font-medium text-foreground">{VENUE_META[venue].label}</h2>
+      <VenueSummary venue={venue} />
+    </div>
   );
 }
 
@@ -208,7 +226,11 @@ function DashboardLive() {
         explorerUrl={vault.vault ? `${env.explorers.flare}/address/${vault.vault}` : undefined}
       />
 
-      <section className="animate-enter" style={{ animationDelay: "90ms" }}>
+      {/* Venue sections. Each answers the same two questions for its own venue — where the money is,
+          and what is allowed to trade it — so a follower on both venues never has to work out which
+          card belongs to which. */}
+      <section className="animate-enter space-y-3" style={{ animationDelay: "90ms" }}>
+        <VenueSectionHeading venue="flare" />
         <NetworkSwitchPrompt
           requiredChain="flare"
           current={net.current}
@@ -246,8 +268,38 @@ function DashboardLive() {
         </NetworkSwitchPrompt>
       </section>
 
-      {/* Active subscriptions */}
-      <section className="animate-enter space-y-3" style={{ animationDelay: "120ms" }}>
+      {/* Copied trades — results only, never the strategy. Every row is a `Swapped` event from this
+          follower's own vault, so it is publicly auditable without revealing what drove it. */}
+      {trades.length > 0 && (
+        <section className="animate-enter space-y-3" style={{ animationDelay: "120ms" }}>
+          <h3 className="text-sm font-medium text-muted-foreground">Trades in this vault</h3>
+          <PositionsTable positions={trades.map(tradeToRow)} loading={tradesLoading} />
+        </section>
+      )}
+
+      {/* The off-chain venue. Shown ONLY once the enclave actually holds a trading key — that key is
+          memory-only and cleared by a restart, so gating on the derived address means the section never
+          invites a follower to authorize something that cannot yet trade. */}
+      {hlAgent.agentAddress && (
+        <section className="animate-enter space-y-3" style={{ animationDelay: "150ms" }}>
+          <VenueSectionHeading venue="hyperliquid" />
+          <AuthorizeAgentCard
+            approved={hlApproval.approved}
+            loading={hlApproval.loading}
+            agentAddress={hlAgent.agentAddress}
+            onAuthorize={async () => {
+              await approveHlAgent();
+              await hlApproval.refetch();
+              toast.success("Copy-trading authorized");
+            }}
+          />
+        </section>
+      )}
+
+      {/* Active subscriptions are venue-independent: a subscription buys access to a leader's signals,
+          and the leader chooses the venue per signal. Placed after the venues so the page reads
+          "here is your money" before "here is who can trade it". */}
+      <section className="animate-enter space-y-3" style={{ animationDelay: "180ms" }}>
         <h2 className="text-sm font-medium text-muted-foreground">
           Copying{subs.length > 0 && <span className="text-muted-foreground/60"> · {subs.length}</span>}
         </h2>
@@ -276,32 +328,9 @@ function DashboardLive() {
         )}
       </section>
 
-      {/* The off-chain venue's onboarding, shown ONLY once the enclave actually holds a trading key.
-          Its key is memory-only and cleared by a restart, so gating on the derived address means the
-          card never invites a follower to authorize something that cannot yet trade. */}
-      {hlAgent.agentAddress && (
-        <section className="animate-enter" style={{ animationDelay: "150ms" }}>
-          <AuthorizeAgentCard
-            approved={hlApproval.approved}
-            loading={hlApproval.loading}
-            agentAddress={hlAgent.agentAddress}
-            onAuthorize={async () => {
-              await approveHlAgent();
-              await hlApproval.refetch();
-              toast.success("Copy-trading authorized");
-            }}
-          />
-        </section>
-      )}
-
-      {/* Copied trades — results only, never the strategy. Every row is a `Swapped` event from this
-          follower's own vault, so it is publicly auditable without revealing what drove it. */}
-      {trades.length > 0 && (
-        <section className="animate-enter space-y-3" style={{ animationDelay: "180ms" }}>
-          <h2 className="text-sm font-medium text-muted-foreground">Copied trades</h2>
-          <PositionsTable positions={trades.map(tradeToRow)} loading={tradesLoading} />
-        </section>
-      )}
+      <section className="animate-enter" style={{ animationDelay: "210ms" }}>
+        <VenueTrustPanel />
+      </section>
     </>
   );
 }
