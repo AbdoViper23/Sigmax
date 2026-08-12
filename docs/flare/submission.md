@@ -98,10 +98,10 @@ inside the follower's non-custodial `CopyVaultFlare`. Hyperliquid spot is a reus
 
 | Contract | Address |
 |---|---|
-| `TeeSigVerifier` | `0x6F57348fB7dA13D1fA8c769beaD1BEaaC091A943` |
-| `CopyVaultFlareFactory` | `0xD2746393C8e1bE019C8d4fd12CF950d6b996eA70` |
-| `SignalRegistry` | `0x132D10A28Fb13dFbBF74bDDCA8828d451DAd7162` |
-| `SubscriptionRegistry` | `0xAEFbE1EDBE57FF7c9851270466979be227AC1139` |
+| `TeeSigVerifier` | `0xa9c3600318CAA856871Ab7161893Bf4DA5E18123` |
+| `CopyVaultFlareFactory` | `0xa031F3337a164A994091c34A8f9bFdE05Abd6717` |
+| `SignalRegistry` | `0x20c6dF5368B09f29F180491342C5F31bc4e783F2` |
+| `SubscriptionRegistry` | `0x87491d3F561BC3Cd78029800705d3ee6d7670882` |
 | `InstructionSender` (FCC entry point) | `0x14D54C022A9c2321BAeba1478c46018e21609f26` (extension `0x…1024f` / 66127) |
 
 **FCC extension:** id `0x…1024f` (66127), registered on the post-redeploy diamond. The TEE machine

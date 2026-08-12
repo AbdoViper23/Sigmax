@@ -304,10 +304,10 @@ first.
 
 | Our contracts | Address |
 |---|---|
-| `TeeSigVerifier` | [`0x6F57348fB7dA13D1fA8c769beaD1BEaaC091A943`](https://coston2-explorer.flare.network/address/0x6F57348fB7dA13D1fA8c769beaD1BEaaC091A943) |
-| `CopyVaultFlareFactory` | [`0xD2746393C8e1bE019C8d4fd12CF950d6b996eA70`](https://coston2-explorer.flare.network/address/0xD2746393C8e1bE019C8d4fd12CF950d6b996eA70) |
-| `SubscriptionRegistry` | [`0xAEFbE1EDBE57FF7c9851270466979be227AC1139`](https://coston2-explorer.flare.network/address/0xAEFbE1EDBE57FF7c9851270466979be227AC1139) |
-| `SignalRegistry` | [`0x132D10A28Fb13dFbBF74bDDCA8828d451DAd7162`](https://coston2-explorer.flare.network/address/0x132D10A28Fb13dFbBF74bDDCA8828d451DAd7162) |
+| `TeeSigVerifier` | [`0xa9c3600318CAA856871Ab7161893Bf4DA5E18123`](https://coston2-explorer.flare.network/address/0xa9c3600318CAA856871Ab7161893Bf4DA5E18123) |
+| `CopyVaultFlareFactory` | [`0xa031F3337a164A994091c34A8f9bFdE05Abd6717`](https://coston2-explorer.flare.network/address/0xa031F3337a164A994091c34A8f9bFdE05Abd6717) |
+| `SubscriptionRegistry` | [`0x87491d3F561BC3Cd78029800705d3ee6d7670882`](https://coston2-explorer.flare.network/address/0x87491d3F561BC3Cd78029800705d3ee6d7670882) |
+| `SignalRegistry` | [`0x20c6dF5368B09f29F180491342C5F31bc4e783F2`](https://coston2-explorer.flare.network/address/0x20c6dF5368B09f29F180491342C5F31bc4e783F2) |
 | `InstructionSender` (FCC entry) | [`0x14D54C022A9c2321BAeba1478c46018e21609f26`](https://coston2-explorer.flare.network/address/0x14D54C022A9c2321BAeba1478c46018e21609f26) |
 | FXRP/testUSD pool (we created it) | [`0x97835403EfbF27Ba52e613d90D4dD21FD66D7511`](https://coston2-explorer.flare.network/address/0x97835403EfbF27Ba52e613d90D4dD21FD66D7511) |
 
@@ -381,14 +381,20 @@ enclave → sign → verify on-chain → swap — with the transactions linked a
   rather than from enclave state, which does not survive a restart) but it is not built. This is the one
   feature gap rather than a rough edge, and it is called out here because everything else in this list is
   an operational caveat.
-- **The deployed contracts are older than this code and need one redeploy.** Verified by calling them:
-  `factory.admin()` and `registry.strategyCount()` both revert, so the live factory cannot follow a
-  re-attested enclave and the live registry cannot enumerate plans (which is what made the leaderboard
-  hang). `pnpm --filter @sigmax/agent deploy:flare` does the redeploy and rewrites all three env files;
-  it refuses to run while the old factory still holds funded vaults, because `vaultOf` does not migrate —
-  those vaults keep their funds but the app stops finding them.
-- The web app's Flare wiring is typechecked and builds, but has **not been clicked through against a
-  live enclave** — the stack was down while it was written.
+- **The contracts are deployed and current** (2026-08-12, addresses below), with a plan and a funded
+  vault seeded so the app shows real on-chain data. `factory.admin()` and `registry.strategyCount()` both
+  respond — on the previous deployment they reverted, which is what stopped the factory following a
+  re-attested enclave and made the leaderboard hang. Redeploying is one command
+  (`pnpm --filter @sigmax/agent deploy:flare`), and it refuses to run while the old factory holds funded
+  vaults, because `vaultOf` does not migrate.
+- **The enclave is not running, so nothing has been exercised live**: no signal published through the UI,
+  no keeper relay, and none of the Hyperliquid path. `factory.teeAddress()` still points at the previous
+  TEE identity; the factory is rotatable now, so `resync` corrects it in one transaction once an enclave
+  is up. Starting one unattended was avoided on purpose — a restart mints a new identity, and a process
+  that does not outlive its session would leave a dead machine registered, which causes intermittent
+  silent routing failures. See §0a of the [runbook](docs/flare/RUNBOOK.md).
+- The web app's contract reads are verified against the live chain (`listPlans` returns the seeded plan),
+  but the app has **not been clicked through end to end** — that needs a running enclave.
 - Some of the stack predates this hackathon; `docs/flare/submission.md` separates what was reused,
   ported, and written new.
 

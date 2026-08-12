@@ -5,6 +5,47 @@ Verified against the repo on 2026-08-11. Paths are relative to the repo root
 
 ---
 
+## 0a. CURRENT DEPLOYMENT STATE — 2026-08-12
+
+The contracts are freshly deployed and seeded. What is done, and what is not, precisely.
+
+**Done, on-chain, permanent:**
+
+| | Address | Verified by calling it |
+|---|---|---|
+| `TeeSigVerifier` | `0xa9c3600318CAA856871Ab7161893Bf4DA5E18123` | — |
+| `CopyVaultFlareFactory` | `0xa031F3337a164A994091c34A8f9bFdE05Abd6717` | `admin()` → deployer ✅ (rotatable) |
+| `SubscriptionRegistry` | `0x87491d3F561BC3Cd78029800705d3ee6d7670882` | `strategyCount()` → 1 ✅ (enumerable) |
+| `SignalRegistry` | `0x20c6dF5368B09f29F180491342C5F31bc4e783F2` | — |
+
+Both functions the previous deployment lacked now respond — `admin()` and `strategyCount()` used to
+revert, which is what made the factory unable to follow a re-attested enclave and the leaderboard hang.
+
+Seeded so the app shows real data rather than only the demo fixtures:
+
+- **A plan**: leader `0xecb5DD1c…647b`, 1.0 testUSD/month, 15% fee, label "Sigmax Demo Strategy".
+  `listPlans(0,50)` returns it — the exact call the leaderboard makes, one `eth_call`, no log scanning.
+- **A funded vault**: `0xAD31372fcED1af8992aa171bDA46816d4495611d`, 0.5 FXRP, cap 1 FXRP, owner
+  `0xecb5DD1c…647b`, whitelisted for FXRP + testUSD via BlazeSwap.
+
+The previous vault (`0x86a072E0…`, from the 2026-08-11 run) was **drained to its owner first** — 0.475
+FXRP and 0.02508 testUSD — because `vaultOf` does not migrate to a new factory. The transactions from
+that run remain valid evidence; the vault is simply empty now.
+
+**Not done — needs a session that outlives a single command:**
+
+The enclave is **not running**, so nothing has been exercised live: no signal published through the UI,
+no keeper relay, and none of the Hyperliquid path. `factory.teeAddress()` is currently the *previous*
+identity `0xBe8E238d…1BaB`, which is deliberate — the factory is rotatable now, so `resync` fixes it in
+one transaction once a real enclave is up.
+
+> Starting the enclave was deliberately **not** attempted unattended. A restart mints a new TEE identity,
+> and an enclave whose process does not outlive the session would leave a dead machine registered — which
+> per the delivery rules below causes intermittent, silent routing failures for whoever runs it next.
+> Bring it up in a session you control, then follow §0 in order.
+
+---
+
 ## 0. PRE-SUBMIT — what must be running for a trade to actually happen
 
 Both venues share the encrypted signal, the enclave, and the Coston2 control plane. They differ in what
@@ -44,7 +85,7 @@ so nothing retries on your behalf. For an instruction to arrive, the selected ma
 
 | Requirement | How to check | Verified for us |
 |---|---|---|
-| Status `2` = PRODUCTION | `getTeeMachineStatus(teeId)` | ✅ `0x736148d4…` = 2 |
+| Status `2` = PRODUCTION | `getTeeMachineStatus(teeId)` | ✅ `0x736148d4…` = 2, but see the note below |
 | An availability check **< ~6h old** | no public getter — a machine idle overnight stops receiving | ⚠️ stale (last live 2026-08-11) |
 | A registered `teeId` | `getActiveTeeMachines(extensionId)` | ✅ one machine, ext `66127` |
 | A **stable public HTTPS** URL | it is stored on-chain, so a changing URL keeps receiving nothing | ✅ reserved ngrok domain |
@@ -99,7 +140,7 @@ Five things run. Only three of them are servers.
 | 2 | **`ext-proxy`** | Docker | `6673` internal · **`6674` external** | The HTTP door Flare's data providers knock on. It forwards instructions to the enclave and returns the signed `ActionResult`. |
 | 3 | **`redis`** | Docker | `6382` → 6379 | The proxy's queue. No persistence (`--save ""`), so nothing sensitive survives a restart. |
 | 4 | **ngrok tunnel** | host process | → `6674` | Gives the proxy a **stable public hostname**. Data providers push to the URL stored **on-chain**, so this hostname cannot change. |
-| 5 | **keeper** | on demand | — | Relays the signed authorization to each vault. Not a daemon in this build — the demo script does it. It pays gas and holds nothing. |
+| 5 | **keeper** | host process | — | Relays the signed authorization to each vault. `pnpm --filter @sigmax/agent keeper` — a real daemon now, not just the demo script. It pays gas and holds nothing, so it is safe to run publicly. |
 
 **Not services:** the contracts (already deployed on Coston2) and the web app (start it only when you
 want the UI).
@@ -162,9 +203,9 @@ cd ..
 DEVKEY=$(grep -oP '^DEPLOYMENT_PRIVATE_KEY="?\K[^"]+' fce-sigmax/.env.local.coston2 | head -1)
 LEADER=0xecb5DD1c755FCE23735f2Eb41Dbd3533CB62647b
 cast send 0x6623C0BB56aDb150dC9C6BdB8682521354c2BF73 "approve(address,uint256)" \
-  0xAEFbE1EDBE57FF7c9851270466979be227AC1139 1000000 \
+  0x87491d3F561BC3Cd78029800705d3ee6d7670882 1000000 \
   --private-key $DEVKEY --rpc-url https://coston2-api.flare.network/ext/C/rpc
-cast send 0xAEFbE1EDBE57FF7c9851270466979be227AC1139 "subscribe(address)" $LEADER \
+cast send 0x87491d3F561BC3Cd78029800705d3ee6d7670882 "subscribe(address)" $LEADER \
   --private-key $DEVKEY --rpc-url https://coston2-api.flare.network/ext/C/rpc
 ```
 
@@ -226,9 +267,9 @@ cast call $VAULT "teeAddress()(address)" --rpc-url $RPC
 DEPLOYMENT_PRIVATE_KEY=$DEVKEY \
 LIVE_TEE_ID=$TEE \
 FLARE_INSTRUCTION_SENDER=$SENDER \
-FLARE_SUBSCRIPTION_REGISTRY=0xAEFbE1EDBE57FF7c9851270466979be227AC1139 \
-FLARE_VAULT_FACTORY=0xD2746393C8e1bE019C8d4fd12CF950d6b996eA70 \
-FLARE_TEE_VERIFIER=0x6F57348fB7dA13D1fA8c769beaD1BEaaC091A943 \
+FLARE_SUBSCRIPTION_REGISTRY=0x87491d3F561BC3Cd78029800705d3ee6d7670882 \
+FLARE_VAULT_FACTORY=0xa031F3337a164A994091c34A8f9bFdE05Abd6717 \
+FLARE_TEE_VERIFIER=0xa9c3600318CAA856871Ab7161893Bf4DA5E18123 \
 EXT_PROXY_URL=https://superurgently-creamless-paityn.ngrok-free.dev \
 pnpm --filter @sigmax/agent exec tsx scripts/flare-e2e-demo.ts
 ```
