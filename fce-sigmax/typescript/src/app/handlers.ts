@@ -10,17 +10,16 @@ import {
   OP_COMMAND_EXECUTE,
 } from './config.js';
 import { abiEncodeTwo } from './abi.js';
-import { signECDSA, parsePrivateKey } from './crypto.js';
+import { signECDSA, parsePrivateKey, addressFromPrivateKey } from './crypto.js';
 import { hexToBytes, bytesToHex } from '../base/encoding.js';
 import { decryptViaNode, setSignPort } from './node.js';
+import { getStoredKey, setStoredKey } from './keystore.js';
+import { masterPublicKey } from './sigmax/hl/agent-key.js';
 import {
   handleSignalExecute,
   reportSigmaxState,
   resetSigmaxState,
 } from './sigmax/handler.js';
-
-/** Mutable state — the framework serializes all handler calls. */
-let privateKey: Uint8Array | null = null;
 
 export { setSignPort };
 
@@ -31,10 +30,21 @@ export function register(framework: Framework): void {
   framework.handle(OP_TYPE_SIGNAL, OP_COMMAND_EXECUTE, handleSignalExecute);
 }
 
-/** Return a JSON-serializable snapshot of the current state. */
+/**
+ * A JSON-serializable snapshot of the current state. Public values only — the key itself is never
+ * exposed here or anywhere else.
+ *
+ * `hlAgentMasterPubkey` is the load-bearing field. A Hyperliquid follower must `approveAgent` to a
+ * specific address, and that address is derived per-follower (see `sigmax/hl/agent-key.ts`). By
+ * publishing the master PUBLIC key, the follower's wallet computes the address it is approving
+ * itself — it verifies the derivation instead of trusting an address a server hands it.
+ */
 export function reportState(): unknown {
+  const key = getStoredKey();
   return {
-    hasKey: privateKey !== null,
+    hasKey: key !== null,
+    agentAddress: key !== null ? addressFromPrivateKey(key) : null,
+    hlAgentMasterPubkey: key !== null ? bytesToHex(masterPublicKey(key)) : null,
     version: VERSION,
     sigmax: reportSigmaxState(),
   };
@@ -42,7 +52,7 @@ export function reportState(): unknown {
 
 /** Reset state (for testing). */
 export function resetState(): void {
-  privateKey = null;
+  setStoredKey(null);
   resetSigmaxState();
 }
 
@@ -74,7 +84,7 @@ async function handleKeyUpdate(
     return [null, 0, `invalid private key: ${e}`];
   }
 
-  privateKey = validatedKey;
+  setStoredKey(validatedKey);
   console.log('private key updated');
   return [null, 1, null];
 }
@@ -82,6 +92,7 @@ async function handleKeyUpdate(
 async function handleKeySign(
   msg: string,
 ): Promise<[string | null, number, string | null]> {
+  const privateKey = getStoredKey();
   if (privateKey === null) {
     return [null, 0, 'no private key stored'];
   }

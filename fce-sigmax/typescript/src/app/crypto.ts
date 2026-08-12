@@ -32,17 +32,17 @@ function bigintToBytes(n: bigint): Uint8Array {
 }
 
 /**
- * Sign a message with ECDSA on secp256k1.
- * The message is hashed with Keccak-256 before signing.
+ * Sign a PRE-HASHED 32-byte digest with ECDSA on secp256k1.
  * Returns 65 bytes: r (32) || s (32) || v (1).
+ *
+ * Split out from `signECDSA` because EIP-712 digests (Hyperliquid action signing) are already the
+ * final hash — running Keccak over them a second time yields a signature the counterparty rejects.
  */
-export function signECDSA(
+export function signDigestECDSA(
   privateKey: Uint8Array,
-  message: Uint8Array,
+  digest: Uint8Array,
 ): Uint8Array {
-  const msgHash = keccak256(message);
-
-  const sig = secp.sign(msgHash, privateKey);
+  const sig = secp.sign(digest, privateKey);
   const r = padLeft(bigintToBytes(sig.r), 32);
   const s = padLeft(bigintToBytes(sig.s), 32);
 
@@ -55,6 +55,49 @@ export function signECDSA(
   result[64] = v;
 
   return result;
+}
+
+/**
+ * Sign a message with ECDSA on secp256k1.
+ * The message is hashed with Keccak-256 before signing.
+ * Returns 65 bytes: r (32) || s (32) || v (1).
+ */
+export function signECDSA(
+  privateKey: Uint8Array,
+  message: Uint8Array,
+): Uint8Array {
+  return signDigestECDSA(privateKey, keccak256(message));
+}
+
+/**
+ * Ethereum address for a private key: keccak256 of the uncompressed public key (minus its 0x04
+ * prefix), last 20 bytes, EIP-55 checksummed.
+ *
+ * Used to publish the enclave's Hyperliquid agent ADDRESS without exposing the key: a follower must
+ * know which address to `approveAgent`, and that address should demonstrably come from the enclave.
+ */
+export function addressFromPrivateKey(privateKey: Uint8Array): string {
+  const pubkey = secp.getPublicKey(privateKey, false).slice(1); // drop the 0x04 uncompressed marker
+  const hashed = keccak256(pubkey).slice(-20);
+  return toChecksumAddress(hashed);
+}
+
+const HEX = '0123456789abcdef';
+
+/** EIP-55 checksum encoding of 20 address bytes. */
+function toChecksumAddress(addr: Uint8Array): string {
+  let lower = '';
+  for (const b of addr) lower += HEX[b >> 4] + HEX[b & 0x0f];
+
+  const hashOfLower = keccak256(new TextEncoder().encode(lower));
+  let out = '0x';
+  for (let i = 0; i < lower.length; i++) {
+    // Each hex nibble of the hash decides the case of the corresponding address nibble.
+    const nibble = i % 2 === 0 ? hashOfLower[i >> 1]! >> 4 : hashOfLower[i >> 1]! & 0x0f;
+    const ch = lower[i]!;
+    out += nibble >= 8 ? ch.toUpperCase() : ch;
+  }
+  return out;
 }
 
 /**

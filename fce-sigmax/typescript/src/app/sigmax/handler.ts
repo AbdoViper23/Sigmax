@@ -19,6 +19,7 @@ import {
   configFromEnv,
   makeClient,
   readActiveFollowers,
+  readActiveSubscribers,
   readDecimals,
   readFtsoPrice,
   invertScaledPrice,
@@ -26,14 +27,23 @@ import {
   type SigmaxChainConfig,
 } from "./chain.js";
 import { decryptViaNode } from "../node.js";
+import { getStoredKey } from "../keystore.js";
+import { httpTransport, type HlTransport } from "./hl/api.js";
+import { encodeHlReceipts, executeHyperliquidSignal } from "./hl/execute.js";
 import { hexToBytes, bytesToHex } from "../../base/encoding.js";
 
-/** Injectable seams so the handler is testable without a TEE node or a live chain. */
+/** Injectable seams so the handler is testable without a TEE node, a live chain, or a live exchange. */
 export interface SigmaxDeps {
   decrypt: (ciphertext: Uint8Array) => Promise<Uint8Array>;
   config: SigmaxChainConfig;
   client: PublicClient;
   now: () => number;
+  /** Hyperliquid venue only. Built lazily from config so the Flare path never opens an exchange client. */
+  hlTransport?: HlTransport;
+  /** Hyperliquid nonce source (milliseconds). Injected so tests are deterministic. */
+  hlNonce?: () => number;
+  /** The injected agent master secret. Indirected through a getter so a later injection is picked up. */
+  getMasterKey?: () => Uint8Array | null;
 }
 
 let deps: SigmaxDeps | null = null;
@@ -42,9 +52,24 @@ let deps: SigmaxDeps | null = null;
 function getDeps(): SigmaxDeps {
   if (deps === null) {
     const config = configFromEnv();
-    deps = { decrypt: decryptViaNode, config, client: makeClient(config), now: () => Math.floor(Date.now() / 1000) };
+    deps = {
+      decrypt: decryptViaNode,
+      config,
+      client: makeClient(config),
+      now: () => Math.floor(Date.now() / 1000),
+      hlNonce: () => Date.now(),
+      getMasterKey: getStoredKey,
+    };
   }
   return deps;
+}
+
+/** The exchange transport, built on first Hyperliquid signal and reused after that. */
+let hlTransportCache: HlTransport | null = null;
+function hlTransportFor(d: SigmaxDeps): HlTransport {
+  if (d.hlTransport) return d.hlTransport;
+  if (hlTransportCache === null) hlTransportCache = httpTransport(d.config.hlTestnet);
+  return hlTransportCache;
 }
 
 /** Override the deps (tests only). Pass `null` to restore the env-derived defaults. */
@@ -53,7 +78,7 @@ export function setSigmaxDeps(d: SigmaxDeps | null): void {
 }
 
 /** Counters surfaced via GET /state — safe to expose (no strategy content). */
-const stats = { signalsProcessed: 0, signalsRejected: 0, authsIssued: 0 };
+const stats = { signalsProcessed: 0, signalsRejected: 0, authsIssued: 0, hlOrdersFilled: 0 };
 
 export function reportSigmaxState(): unknown {
   return { ...stats };
@@ -63,6 +88,7 @@ export function resetSigmaxState(): void {
   stats.signalsProcessed = 0;
   stats.signalsRejected = 0;
   stats.authsIssued = 0;
+  stats.hlOrdersFilled = 0;
   resetSubscriberCache();
 }
 
@@ -115,11 +141,21 @@ export async function handleSignalExecute(msg: string): Promise<[string | null, 
     return reject(`invalid signal: ${e}`);
   }
 
-  if (signal.venue !== "flare") return reject(`unsupported venue for this extension`);
-  if (BigInt(signal.chainId) !== config.chainId) return reject("signal chainId does not match this chain");
+  if (signal.venue !== "flare" && signal.venue !== "hyperliquid") {
+    return reject("unsupported venue for this extension");
+  }
 
   const nowSecs = now();
   if (signal.expiresAt !== 0 && nowSecs > signal.expiresAt) return reject("signal expired");
+
+  // Hyperliquid settles off-chain, so `chainId` addresses the CONTROL plane (where subscriptions and
+  // the signal commitment live), which is this chain either way. Only the Flare venue additionally
+  // requires it to match, because there it also names the settlement chain.
+  if (signal.venue === "hyperliquid") {
+    return handleHyperliquidSignal(signal, getDeps());
+  }
+
+  if (BigInt(signal.chainId) !== config.chainId) return reject("signal chainId does not match this chain");
 
   try {
     const { value, decimals } = await readFtsoPrice(client, config);
@@ -156,6 +192,52 @@ export async function handleSignalExecute(msg: string): Promise<[string | null, 
     return [resultData, 1, null];
   } catch (e) {
     return reject(`execution failed: ${e}`);
+  }
+}
+
+/**
+ * The Hyperliquid venue: decrypt has already happened, so from here the signal is confidential.
+ *
+ * Unlike the Flare path there is no authorization to hand to a keeper — Hyperliquid has nothing
+ * on-chain to verify a TEE signature against, so the enclave places the order itself with the
+ * follower's own derived agent key. `resultData` is therefore a RECEIPT of what happened, not a
+ * permission to do it.
+ */
+async function handleHyperliquidSignal(
+  signal: Signal,
+  d: SigmaxDeps,
+): Promise<[string | null, number, string | null]> {
+  const masterKey = d.getMasterKey?.() ?? null;
+  if (masterKey === null) {
+    return reject("hyperliquid venue has no agent key — inject one via KEY/UPDATE");
+  }
+  if (d.config.hlPerTradeCapUnits <= 0n) {
+    // Refusing beats trading unbounded: on this venue the config value is the only cap that exists.
+    return reject("hyperliquid per-trade cap is not configured");
+  }
+
+  try {
+    const subscribers = await readActiveSubscribers(d.client, d.config, signal.strategyId);
+
+    const { receipts, filled, skipped } = await executeHyperliquidSignal({
+      signal,
+      subscribers,
+      transport: hlTransportFor(d),
+      masterKey,
+      isTestnet: d.config.hlTestnet,
+      slippageBps: d.config.slippageBps,
+      perTradeCapUnits: d.config.hlPerTradeCapUnits,
+      nonce: d.hlNonce ?? (() => Date.now()),
+    });
+
+    stats.signalsProcessed += 1;
+    stats.hlOrdersFilled += filled;
+    // Counts and the (already public) signal id only — never the market, size, or thresholds.
+    console.log(`signal ${signal.signalId} processed on hyperliquid: ${filled} filled, ${skipped} skipped`);
+    return [encodeHlReceipts(receipts), 1, null];
+  } catch {
+    // The underlying error can quote the price or size back at us; those belong to the strategy.
+    return reject("hyperliquid execution failed");
   }
 }
 
