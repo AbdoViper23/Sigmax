@@ -49,17 +49,30 @@ const ROWS: Row[] = [
   },
 ];
 
-export function VenueTrustPanel({ venues = ["flare", "hyperliquid"] }: { venues?: BadgeVenue[] }) {
+export function VenueTrustPanel({
+  venues = ["flare", "hyperliquid"],
+  /**
+   * Drop the card's own title and description. Set this where the surrounding page already introduces
+   * the comparison — on the landing page the section heading says the same thing, and repeating it two
+   * lines later is the kind of duplication that makes a page feel machine-assembled.
+   */
+  bare = false,
+}: {
+  venues?: BadgeVenue[];
+  bare?: boolean;
+}) {
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Where your trades run</CardTitle>
-        <CardDescription>
-          Two venues, one enclave. The strategy stays sealed on both — what differs is what stops a bad
-          trade.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
+      {!bare && (
+        <CardHeader>
+          <CardTitle>Where your trades run</CardTitle>
+          <CardDescription>
+            Two venues, one enclave. The strategy stays sealed on both — what differs is what stops a
+            bad trade.
+          </CardDescription>
+        </CardHeader>
+      )}
+      <CardContent className={bare ? "pt-6" : undefined}>
         {/* A table, because the whole point is a column-by-column comparison. Scrolls inside itself on
             narrow screens so the page body never scrolls sideways. */}
         <div className="-mx-2 overflow-x-auto px-2">

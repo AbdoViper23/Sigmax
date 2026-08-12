@@ -1,18 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import {
-  ArrowRight,
-  CheckCircle2,
-  EyeOff,
-  KeyRound,
-  LineChart,
-  Lock,
-  ShieldCheck,
-  TrendingUp,
-  Wallet,
-} from "lucide-react";
+import { ArrowRight, CheckCircle2, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SignalChart } from "@/components/sigmax/SignalChart";
 import { VenueTrustPanel } from "@/components/sigmax/VenueTrustPanel";
+import { EncryptionTheatre } from "@/components/sigmax/EncryptionTheatre";
+import { useReveal, useRevealGroup } from "@/hooks/useReveal";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -35,20 +28,37 @@ export const Route = createFileRoute("/")({
 });
 
 function Index() {
+  // Scroll-reveal groups. Each ref staggers its own direct children; content stays visible without JS
+  // and for reduced-motion users (see useReveal).
+  const steps = useRevealGroup<HTMLOListElement>();
+  const pillars = useRevealGroup();
+  const audiences = useRevealGroup();
+  const venuePanel = useReveal();
+
   return (
     <main>
       {/* ---------- Hero ---------- */}
-      <section className="mx-auto grid max-w-6xl items-center gap-12 px-4 py-16 md:grid-cols-[1.05fr_0.95fr] md:py-24">
+      {/* `relative` + `isolate` so the aurora sits behind this section's content and cannot bleed over
+          the next one. The colour in this design lives here, not in the semantic tokens. */}
+      <section className="relative isolate overflow-hidden">
+        <div className="aurora" aria-hidden>
+          <div className="aurora-blob aurora-blob-1" />
+          <div className="aurora-blob aurora-blob-2" />
+          <div className="aurora-blob aurora-blob-3" />
+        </div>
+
+        <div className="mx-auto grid max-w-6xl items-center gap-12 px-4 py-16 md:grid-cols-[1.05fr_0.95fr] md:py-24">
         <div>
-          <span className="inline-flex animate-enter items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground">
-            <Lock className="h-3 w-3 text-primary" aria-hidden /> Confidential copy-trading on Flare
-          </span>
+          {/* No eyebrow pill above the headline. "Confidential copy-trading on Flare" restated the
+              tagline the nav and the <title> already carry, and a bordered capsule announcing your own
+              category is the most generic thing a landing page can open with. The headline is stronger
+              standing alone. */}
           <h1
-            className="mt-5 max-w-xl animate-enter text-4xl font-semibold leading-[1.05] tracking-tight sm:text-5xl md:text-6xl"
-            style={{ animationDelay: "60ms" }}
+            className="max-w-xl animate-enter text-4xl font-semibold leading-[1.05] tracking-tight sm:text-5xl md:text-6xl"
           >
             Copy verified traders.{" "}
-            <span className="text-muted-foreground">Without trusting them.</span>
+            {/* The gradient lands on the clause that carries the whole proposition. */}
+            <span className="text-gradient">Without trusting them.</span>
           </h1>
           <p
             className="mt-5 max-w-xl animate-enter text-lg text-muted-foreground"
@@ -88,59 +98,82 @@ function Index() {
         <div className="animate-enter" style={{ animationDelay: "180ms" }}>
           <SealedSignalCard />
         </div>
+        </div>
       </section>
 
-      {/* ---------- How it works ---------- */}
+      {/* ---------- The path a signal takes ---------- */}
+      {/*
+        Rebuilt to stop reading like a template. What went: the "How it works" eyebrow, an alliterative
+        title ("Confidential from signal to swap"), 01–04 counters, and a tinted icon chip per step —
+        that exact combination is the house style of every generated landing page, and it says nothing.
+
+        What replaced it: the actual handoffs, named. Real components (`InstructionSender`,
+        `CopyVaultFlare`), the real oracle, the real DEX. A reader who knows the stack can check these;
+        a reader who doesn't still learns where their money goes. Specificity is what generic copy
+        cannot fake.
+      */}
       <section className="border-t border-border bg-card/40">
         <div className="mx-auto max-w-6xl px-4 py-16 md:py-20">
-          <SectionHead eyebrow="How it works" title="Confidential from signal to swap" />
-          <ol className="mt-10 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
-            <Step
-              n="01"
-              icon={<KeyRound className="h-5 w-5" />}
-              title="Publish, encrypted"
-              body="The leader's signal is encrypted in the browser before it leaves. No server — not even ours — ever sees the strategy."
+          <h2 className="max-w-2xl text-3xl font-semibold tracking-tight md:text-4xl">
+            The strategy is readable in exactly one place.
+          </h2>
+          <p className="mt-3 max-w-[65ch] text-muted-foreground">
+            Follow a signal from the leader's keyboard to your balance. It is plaintext for the length of
+            one function call, inside hardware neither of you controls.
+          </p>
+
+          <ol ref={steps} className="mt-10 grid gap-x-6 gap-y-8 sm:grid-cols-2 lg:grid-cols-4">
+            <Stage
+              where="the leader's browser"
+              tint="primary"
+              title="Encrypted before it leaves"
+              body="The signal is sealed to the enclave's public key on the leader's own machine. No server receives the plaintext, because no server is in the path."
             />
-            <Step
-              n="02"
-              icon={<ShieldCheck className="h-5 w-5" />}
-              title="Only the enclave decrypts"
-              body="A TEE agent, attested on-chain, is the single thing that can open the signal — and only to place the trade."
+            <Stage
+              where="InstructionSender · Coston2"
+              tint="flare"
+              title="Published as ciphertext"
+              body="One transaction the leader signs carries the opaque bytes and commits their hash — so the record exists before the outcome does."
             />
-            <Step
-              n="03"
-              icon={<Wallet className="h-5 w-5" />}
-              title="Executes in your vault"
-              body="The swap runs in your own non-custodial vault, within your token list and caps. The agent can never withdraw."
+            <Stage
+              where="the enclave"
+              tint="hyperliquid"
+              title="Opened once, to act"
+              body="Attested code decrypts, sizes the trade against each subscriber's balance, bounds the price with the FTSO feed, and signs an authorization. Nothing else can open it."
             />
-            <Step
-              n="04"
-              icon={<LineChart className="h-5 w-5" />}
-              title="You copy the outcome"
-              body="You get the result — never the take-profit, stop-loss, or entry rule. Nothing to screenshot, forward, or resell."
+            <Stage
+              where="CopyVaultFlare · your vault"
+              tint="success"
+              title="Verified on-chain, then swapped"
+              body="Your vault checks the enclave's signature itself before moving a token. You get the fill; the thresholds behind it never existed outside the enclave."
             />
           </ol>
         </div>
       </section>
 
       {/* ---------- Guarantees ---------- */}
+      {/* Same treatment as the section above: the eyebrow + "Three guarantees, enforced by design" +
+          icon-chip pattern is dropped. Counting your own guarantees in the heading adds nothing the
+          three cards below don't already show. */}
       <section className="mx-auto max-w-6xl px-4 py-16 md:py-20">
-        <SectionHead eyebrow="Why it holds" title="Three guarantees, enforced by design" />
-        <div className="mt-10 grid gap-4 md:grid-cols-3">
+        <h2 className="max-w-2xl text-3xl font-semibold tracking-tight md:text-4xl">
+          Each promise is kept by something other than us.
+        </h2>
+        <div ref={pillars} className="mt-10 grid gap-4 md:grid-cols-3">
           <Pillar
-            icon={<ShieldCheck className="h-5 w-5" />}
+            kept="by your vault contract"
             title="Funds stay in your vault"
-            body="The agent can only swap within your token list and caps. It can never withdraw. Revoke access anytime."
+            body="Swaps are confined to your token list and your per-trade cap. Withdrawal is owner-only, so the enclave and the keeper both lack the ability — not merely the permission."
           />
           <Pillar
-            icon={<EyeOff className="h-5 w-5" />}
+            kept="by encrypting client-side"
             title="Strategy stays secret"
-            body="Signals are client-side encrypted before broadcast. Followers see results — never the thresholds behind them."
+            body="The signal is sealed on the leader's machine, so there is no server that could leak it, be subpoenaed for it, or be breached for it."
           />
           <Pillar
-            icon={<TrendingUp className="h-5 w-5" />}
+            kept="by publish order"
             title="Track record is verifiable"
-            body="Every signal is committed on-chain before its outcome is known. No cherry-picking, no fake histories."
+            body="The commitment hash lands on-chain before the outcome is known. A losing signal cannot be quietly withdrawn from the history afterwards."
           />
         </div>
       </section>
@@ -151,20 +184,23 @@ function Index() {
           convincing than implying they are identical. */}
       <section className="border-t border-border">
         <div className="mx-auto max-w-3xl px-4 py-16 md:py-20">
-          <SectionHead
-            eyebrow="Two venues"
-            title="One sealed signal, wherever it settles"
-            body="The same encrypted signal and the same attested enclave, on-chain or on an order book. What differs is what stops a bad trade — and we say which is which."
-          />
-          <div className="mt-10">
-            <VenueTrustPanel />
+          <h2 className="max-w-2xl text-3xl font-semibold tracking-tight md:text-4xl">
+            Two venues. We'll tell you which one is stronger.
+          </h2>
+          <p className="mt-3 max-w-[65ch] text-muted-foreground">
+            The same sealed signal and the same enclave settle either on-chain or on an order book. On
+            Flare a contract refuses a bad trade; on Hyperliquid attested code does. Those are not equal,
+            so the table below says so instead of implying they are.
+          </p>
+          <div ref={venuePanel} className="mt-10">
+            <VenueTrustPanel bare />
           </div>
         </div>
       </section>
 
       {/* ---------- For leaders / followers ---------- */}
       <section className="border-t border-border bg-card/40">
-        <div className="mx-auto grid max-w-6xl gap-4 px-4 py-16 md:grid-cols-2 md:py-20">
+        <div ref={audiences} className="mx-auto grid max-w-6xl gap-4 px-4 py-16 md:grid-cols-2 md:py-20">
           <ValueCard
             title="For leaders"
             cta={{ to: "/leader", label: "Become a leader" }}
@@ -262,80 +298,80 @@ function SealedSignalCard() {
         </div>
       </div>
 
-      <div className="mt-5 rounded-lg border border-dashed border-border bg-muted/30 p-4">
-        <div className="mb-3 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-          <Lock className="h-3.5 w-3.5 text-primary" aria-hidden /> Encrypted — only the enclave can
-          read this
-        </div>
-        <div className="space-y-2.5">
-          {secretRows.map((label, i) => (
-            <div key={label} className="flex items-center justify-between gap-3">
-              <span className="text-xs text-muted-foreground">{label}</span>
-              <span
-                className="encrypted-bar h-2.5 w-28 overflow-hidden rounded-full bg-muted-foreground/20"
-                style={{ animationDelay: `${i * 500}ms` }}
-                aria-hidden
-              />
-            </div>
-          ))}
-        </div>
-      </div>
+      {/* Replaces three shimmering placeholder bars. Those said "something is hidden"; this shows the
+          actual transformation — real values becoming ciphertext — which is the claim itself. */}
+      <EncryptionTheatre className="mt-5" />
     </div>
   );
 }
 
-function SectionHead({
-  eyebrow,
-  title,
-  body,
-}: {
-  eyebrow: string;
-  title: string;
-  /** Optional lede. Constrained to ~65ch so a long line never becomes hard to track. */
-  body?: string;
-}) {
-  return (
-    <div>
-      <div className="text-xs font-medium uppercase tracking-wider text-primary">{eyebrow}</div>
-      <h2 className="mt-2 text-3xl font-semibold tracking-tight md:text-4xl">{title}</h2>
-      {body && <p className="mt-3 max-w-[65ch] text-muted-foreground">{body}</p>}
-    </div>
-  );
-}
 
-function Step({
-  n,
-  icon,
+/**
+ * One handoff in a signal's path.
+ *
+ * No counter and no icon chip, on purpose. `01 02 03 04` beside a rounded icon square is the visual
+ * signature of filler content, and neither element carried information here — the ORDER is already
+ * given by reading order, and a key glyph next to "encrypted" only restates the word beside it.
+ *
+ * What does the work instead is `where`: the actual component or machine the step happens on, in mono,
+ * above a coloured rule. That is a fact a reader can verify, and it is the part a template could not
+ * have written.
+ */
+function Stage({
+  where,
   title,
   body,
+  tint,
 }: {
-  n: string;
-  icon: React.ReactNode;
+  where: string;
   title: string;
   body: string;
+  tint: "primary" | "hyperliquid" | "flare" | "success";
 }) {
+  const rules = {
+    primary: "bg-primary",
+    hyperliquid: "bg-chain-hyperliquid",
+    flare: "bg-chain-flare",
+    success: "bg-success",
+  } as const;
+  const labels = {
+    primary: "text-primary",
+    hyperliquid: "text-chain-hyperliquid",
+    flare: "text-chain-flare",
+    success: "text-success",
+  } as const;
+
   return (
-    <li className="relative">
-      <div className="flex items-center gap-3">
-        <span className="grid h-9 w-9 place-items-center rounded-md bg-accent text-accent-foreground">
-          {icon}
-        </span>
-        <span className="font-mono text-xs text-muted-foreground">{n}</span>
-      </div>
-      <h3 className="mt-3 font-semibold">{title}</h3>
+    <li className="group">
+      {/* The rule is the sequence marker: it grows on hover, which is the only motion here and the only
+          thing standing in for the deleted counter. */}
+      <span
+        className={cn(
+          "block h-px w-10 origin-left transition-transform duration-300 ease-out group-hover:scale-x-[2]",
+          rules[tint],
+        )}
+        aria-hidden
+      />
+      <div className={cn("mt-3 font-mono text-[11px] tracking-tight", labels[tint])}>{where}</div>
+      <h3 className="mt-2 font-semibold">{title}</h3>
       <p className="mt-1.5 text-sm text-muted-foreground">{body}</p>
     </li>
   );
 }
 
-function Pillar({ icon, title, body }: { icon: React.ReactNode; title: string; body: string }) {
+/**
+ * A guarantee, with the mechanism that enforces it in place of an icon.
+ *
+ * `kept` is doing what the icon chip was pretending to do. A shield glyph next to "funds stay in your
+ * vault" is a mood; "by your vault contract" is the actual answer to the only question a sceptical
+ * reader has — who is stopping you. That swap is the whole point of the change.
+ */
+function Pillar({ kept, title, body }: { kept: string; title: string; body: string }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-6">
-      <div className="mb-3 inline-flex h-9 w-9 items-center justify-center rounded-md bg-accent text-accent-foreground">
-        {icon}
-      </div>
+    <div className="hover-lift rounded-xl border border-border bg-card p-6">
       <h3 className="font-semibold">{title}</h3>
-      <p className="mt-1.5 text-sm text-muted-foreground">{body}</p>
+      <div className="mt-1 font-mono text-[11px] text-primary">{kept}</div>
+      <p className="mt-3 text-sm text-muted-foreground">{body}</p>
     </div>
   );
 }
