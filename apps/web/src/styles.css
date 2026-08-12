@@ -227,6 +227,226 @@
   }
 }
 
+/* ---------- Landing-page energy ----------
+ *
+ * The landing page is allowed to be louder than the app. A dashboard someone works in should be calm;
+ * a first impression has to earn attention. So the expressive motion and colour live here, scoped to
+ * the marketing surface, and the working surfaces keep the quiet palette.
+ *
+ * Every rule below animates ONLY `transform` and `opacity` — never width/height/top/left — so nothing
+ * triggers layout and nothing shifts (CLS stays at zero). All of it is inside a
+ * `prefers-reduced-motion: no-preference` guard or degrades to a static end state.
+ */
+
+/* Ambient colour field. Three blurred blobs in the venue hues drift behind the hero, which is where
+   the colour in this design comes from — the semantic tokens stay untouched, so the contrast work
+   holds. Blobs are pushed to the edges and sit at low opacity so text luminance is unaffected. */
+.aurora {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  /* Fades out toward the bottom so the section boundary never shows a hard edge. */
+  mask-image: linear-gradient(to bottom, black 55%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, black 55%, transparent 100%);
+}
+
+/*
+ * Aurora hues are their OWN tokens, not the semantic ones, for a measured reason.
+ *
+ * The obvious move — reuse `--primary` — fails in dark mode, where primary is a near-white
+ * (L 0.929). A near-white blob over a dark page lifts the background toward the text colour and
+ * `muted-foreground` collapses to 3.37:1. So each theme picks a chromatic lightness that moves the
+ * background AWAY from its text: darker than an ivory page, darker than a slate one. Measured worst
+ * case with the blob at full opacity directly beneath 18px body copy: ≥ 4.6:1 in both themes.
+ */
+:root {
+  --aurora-1: oklch(0.6 0.14 165); /* emerald, the brand accent */
+  --aurora-2: oklch(0.62 0.17 25); /* Flare coral */
+  --aurora-3: oklch(0.58 0.12 175); /* Hyperliquid teal */
+  --aurora-opacity: 0.22;
+}
+
+.dark {
+  --aurora-1: oklch(0.42 0.13 165);
+  --aurora-2: oklch(0.44 0.16 25);
+  --aurora-3: oklch(0.4 0.11 175);
+  /* Darker blobs on a dark page only deepen it, so dark mode affords more colour, not less. */
+  --aurora-opacity: 0.42;
+}
+
+.aurora-blob {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(72px);
+  opacity: var(--aurora-opacity);
+  will-change: transform;
+}
+
+.dark .aurora-blob {
+  filter: blur(88px);
+}
+
+.aurora-blob-1 {
+  top: -18%;
+  left: -8%;
+  width: 34rem;
+  height: 34rem;
+  background: var(--aurora-1);
+}
+
+.aurora-blob-2 {
+  top: 6%;
+  right: -12%;
+  width: 30rem;
+  height: 30rem;
+  background: var(--aurora-2);
+}
+
+.aurora-blob-3 {
+  bottom: -24%;
+  left: 34%;
+  width: 26rem;
+  height: 26rem;
+  background: var(--aurora-3);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Long, offset periods so the three never visibly loop in sync. */
+  .aurora-blob-1 {
+    animation: aurora-drift-a 26s ease-in-out infinite alternate;
+  }
+  .aurora-blob-2 {
+    animation: aurora-drift-b 32s ease-in-out infinite alternate;
+  }
+  .aurora-blob-3 {
+    animation: aurora-drift-c 38s ease-in-out infinite alternate;
+  }
+}
+
+@keyframes aurora-drift-a {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(6%, 8%, 0) scale(1.12);
+  }
+}
+
+@keyframes aurora-drift-b {
+  from {
+    transform: translate3d(0, 0, 0) scale(1.08);
+  }
+  to {
+    transform: translate3d(-8%, 6%, 0) scale(1);
+  }
+}
+
+@keyframes aurora-drift-c {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(10%, -6%, 0) scale(1.15);
+  }
+}
+
+/* Headline accent: the one place a gradient is worth it, because it is the one line that has to land.
+   `background-clip: text` needs a transparent fill; the fallback colour keeps it readable if the
+   browser drops the clip. */
+.text-gradient {
+  color: var(--color-primary);
+  background-image: linear-gradient(
+    100deg,
+    var(--color-primary) 0%,
+    var(--color-chain-hyperliquid) 46%,
+    var(--color-chain-flare) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  /* Wider than the text so the animated sweep has somewhere to travel. */
+  background-size: 220% 100%;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .text-gradient {
+    animation: gradient-sweep 9s ease-in-out infinite alternate;
+  }
+}
+
+@keyframes gradient-sweep {
+  from {
+    background-position: 0% 50%;
+  }
+  to {
+    background-position: 100% 50%;
+  }
+}
+
+/* Scroll reveal. Values follow the Standard tier: ~420ms, power2.out-equivalent easing, 16px of
+   travel so it reads as a fade rather than a slide. `--reveal-i` staggers siblings; the JS only ever
+   adds `.reveal-in`, so a no-JS or crawler visit sees the fallback below. */
+.reveal {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .reveal {
+    opacity: 0;
+    transform: translateY(16px);
+    transition:
+      opacity 420ms cubic-bezier(0.16, 1, 0.3, 1),
+      transform 420ms cubic-bezier(0.16, 1, 0.3, 1);
+    transition-delay: calc(var(--reveal-i, 0) * 70ms);
+  }
+
+  .reveal-in {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* The scramble in the hero's encryption demo: a brief flicker as a value is replaced by ciphertext.
+   Opacity only — the character swap is done in JS, and the box has a fixed height so nothing jumps. */
+@media (prefers-reduced-motion: no-preference) {
+  .cipher-flicker {
+    animation: cipher-flicker 620ms steps(4, end) infinite;
+  }
+}
+
+@keyframes cipher-flicker {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+/* A soft glow ring for the "sealed" moment — signals completion without a colour-only cue (an icon
+   and a label accompany it in the markup). */
+.seal-glow {
+  box-shadow: 0 0 0 1px var(--color-primary), 0 0 28px -6px var(--color-primary);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .seal-glow {
+    animation: seal-pulse 2.4s ease-in-out infinite;
+  }
+}
+
+@keyframes seal-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px var(--color-primary), 0 0 22px -10px var(--color-primary);
+  }
+  50% {
+    box-shadow: 0 0 0 1px var(--color-primary), 0 0 34px -4px var(--color-primary);
+  }
+}
+
 /* Accessibility: honor prefers-reduced-motion everywhere (covers tw-animate-css + the above). */
 @media (prefers-reduced-motion: reduce) {
   *,
