@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import sigmaxMark from "@/assets/sigmax-mark.svg";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { EnclaveStatusPill } from "./EnclaveStatusPill";
 
 /**
  * Top nav. Wallet connection + chain switching are handled by RainbowKit's ConnectButton
@@ -39,6 +40,8 @@ export function Nav() {
           ))}
         </nav>
         <div className="ml-auto flex items-center gap-2">
+          {/* The product's central claim, verifiable at a glance from any page. */}
+          <EnclaveStatusPill />
           <ConnectButton showBalance={false} accountStatus="address" chainStatus="icon" />
         </div>
       </div>

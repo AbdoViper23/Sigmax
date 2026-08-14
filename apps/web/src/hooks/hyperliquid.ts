@@ -6,6 +6,7 @@ import { ExchangeClient, HttpTransport, InfoClient } from "@nktkas/hyperliquid";
 import type { AbstractWallet } from "@nktkas/hyperliquid/signing";
 import { deriveHlAgentAddress } from "@sigmax/enclave-crypto";
 import { env } from "@/lib/env";
+import { readEnclaveState } from "@/lib/enclave";
 import type { PositionRow } from "@/components/sigmax/PositionsTable";
 import {
   buildMarkets,
@@ -66,11 +67,10 @@ export function useHlAgentAddress(address?: Address) {
     enabled: Boolean(address && env.flareProxyUrl),
     staleTime: 60_000,
     queryFn: async (): Promise<{ agentAddress: string; masterPubkey: string } | null> => {
-      const res = await fetch(`${env.flareProxyUrl}/state`);
-      if (!res.ok) return null;
-      const body = (await res.json()) as { state?: { hlAgentMasterPubkey?: string | null } };
-      const masterPubkey = body.state?.hlAgentMasterPubkey;
-      if (!masterPubkey) return null; // no key injected in the enclave yet
+      // Failover fetch: tries the same-origin proxy path, then the public tunnel (see lib/enclave).
+      const state = await readEnclaveState();
+      const masterPubkey = state?.hlAgentMasterPubkey;
+      if (!masterPubkey) return null; // unreachable, or no key injected in the enclave yet
       return { agentAddress: deriveHlAgentAddress(masterPubkey, address!), masterPubkey };
     },
   });

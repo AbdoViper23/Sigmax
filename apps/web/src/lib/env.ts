@@ -44,6 +44,17 @@ export const env = {
   /** Public URL of the FCC ext-proxy; the browser reads the enclave's ECIES key from its /info. */
   flareProxyUrl: E.VITE_FLARE_PROXY_URL?.replace(/\/$/, ""),
   /**
+   * Second route to the same proxy, tried when the first fails. In dev the primary is the
+   * same-origin `/enclave` path (no CORS, no interstitial) and this is the public tunnel; on a
+   * static deploy without a reverse proxy the tunnel becomes the only route that works.
+   */
+  flareProxyFallbackUrl: E.VITE_FLARE_PROXY_FALLBACK?.replace(/\/$/, ""),
+  /** Extra Coston2 RPC endpoints; every read fails over across these (see wagmi.ts). */
+  flareRpcFallbacks: (E.VITE_FLARE_RPC_FALLBACKS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean),
+  /**
    * Block to start every log scan from — the control plane's deploy block.
    *
    * `fromBlock: "earliest"` is not a slow version of this, it is a broken one: the public Coston2 RPC

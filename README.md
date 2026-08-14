@@ -11,11 +11,12 @@
 **The strategy never leaks — the track record stays verifiable on-chain.**
 
 [![Network](https://img.shields.io/badge/Flare-Coston2%20(114)-e62058)](https://coston2-explorer.flare.network)
-[![Tests](https://img.shields.io/badge/tests-304%20passing-2ea043)](#tests)
-[![Live](https://img.shields.io/badge/end--to--end-executed%20on--chain-2ea043)](#the-run-that-proves-it)
+[![Tests](https://img.shields.io/badge/tests-293%20passing-2ea043)](#tests)
+[![Flare](https://img.shields.io/badge/Flare%20venue-swaps%20executed%20on--chain-2ea043)](#the-run-that-proves-it)
+[![Hyperliquid](https://img.shields.io/badge/Hyperliquid%20venue-spot%20fills%20executed-2ea043)](#the-run-that-proves-it)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-[Live evidence](#the-run-that-proves-it) · [How it works](#how-it-works) · [Flare integration](#how-it-uses-flare) · [Run it](#run-it-yourself) · [Addresses](#deployed-addresses)
+[For judges](#for-judges--a-3-minute-tour) · [Live evidence](#the-run-that-proves-it) · [How it works](#how-it-works) · [Flare integration](#how-it-uses-flare) · [Run it](#run-it-yourself) · [Addresses](#deployed-addresses)
 
 </div>
 
@@ -59,35 +60,79 @@ The result is four properties at once, none traded against another:
 
 ---
 
+## For judges — a 3-minute tour
+
+Everything below runs from the browser at `localhost:8080`, against live Coston2 and live
+Hyperliquid testnet. No mocks, no privileged scripts.
+
+1. **Look at the nav.** The **`● TEE live`** pill is a real heartbeat — it polls the enclave's own
+   `/state` and shows the counters the enclave reports about itself (signals decrypted,
+   authorizations signed, exchange fills). Hover it. If that pill is green, the machine holding the
+   only decryption key in existence is up.
+2. **`/leader` — publish an encrypted signal.** Pick a venue, a market, type a take-profit and
+   stop-loss, publish. The TP/SL are ECIES-sealed **in the browser** before anything leaves the
+   page; the transaction carries only ciphertext. Note the live *"Pool ↔ FTSO oracle gap"* line —
+   the vault will only execute within 1% of the FTSO price, and the form tells you *before* you
+   publish whether that bound can currently be met.
+3. **`/follower` — the money never moves to us.** The vault card shows funds in a contract only the
+   follower can withdraw from. The Hyperliquid card derives the agent address **in the browser**
+   from the enclave's published key — the user verifies what they authorize instead of trusting a
+   server — and that agent can trade but can never withdraw (exchange-enforced).
+4. **Watch a trade land.** Publishing on the Flare venue moves the vault's FXRP/testUSD balances a
+   couple of minutes later; on the Hyperliquid venue the fill appears in the follower's account
+   within seconds. Both are independently checkable — explorer links below.
+
+**The four claims, and where each is enforced:** confidential (ECIES to the enclave key, browser-side) ·
+non-custodial (vault contract / exchange agent rules) · verifiable (every fill is a public tx) ·
+spot-only (single `executeSwap` primitive on Flare; `assetId ≥ 10000` guard on Hyperliquid).
+
+---
+
 ## The run that proves it
 
-Not a mock, not a fork, not a privileged shortcut. Re-executed on Coston2 on **2026-08-12** against the
-current deployment and a freshly attested enclave identity:
+Not a mock, not a fork, not a privileged shortcut — and not only a script: the runs below were driven
+through the **web UI** (a real browser, a real wallet) on **2026-08-13/14** against the current
+deployment.
+
+### Flare venue — the vault traded on a signal nobody could read
 
 ```
-follower vault 0xAD31372f…
+follower vault 0xAD31372f…                        (2026-08-14, two consecutive UI publishes)
 
-  before   0.500000 FXRP    0.000000 testUSD
-  after    0.475000 FXRP    0.025234 testUSD
-           └─ sold by a signal nobody outside the enclave could read
-
-  (re-run repeatedly since; latest relay 0xc07cb348…, one machine registered, routed first try)
+  FXRP      0.885892  →  0.891609  →  0.897036
+  testUSD   0.114829  →  0.109088  →  0.103634
+            └─ each step: encrypted in the browser → decrypted only inside the TEE →
+               SwapAuth signed → vault verified the signature on-chain → BlazeSwap swap
 ```
 
 | Step | On-chain evidence |
 |---|---|
-| **1.** Leader encrypts in-process, publishes ciphertext | [`0x659510c7…`](https://coston2-explorer.flare.network/tx/0x659510c76198ac0f4660ead11500e8c53b91ec6fd1a4f8ad644f3111a66e0009) — 753 bytes, no plaintext field |
-| **2.** Enclave decrypts, sizes per follower, signs a `SwapAuth[]` | action `0x51aace69…`, status `1` |
-| **3.** Vault verifies the TEE signature and swaps | [`0x4fe94de8…`](https://coston2-explorer.flare.network/tx/0x4fe94de8ce048383c48faa353be020b51bb37b13386ba65b37342d065b1e0695) — success, 314,145 gas |
+| **1.** Browser encrypts, wallet publishes ciphertext | [`0x32faa894…`](https://coston2-explorer.flare.network/tx/0x32faa8947546f42ed501821c3ea57eacf446f6d9a93e2d60d2ae2d8d14b060cd) — 753 bytes, no plaintext field |
+| **2.** Enclave decrypts, sizes per follower, signs `SwapAuth[]` | action status `1` (enclave-reported; see the TEE pill) |
+| **3.** Vault verifies the TEE signature and swaps | [`0xc01dea36…`](https://coston2-explorer.flare.network/tx/0xc01dea36e1ac841242db1dae0d88de21079bd762553a88821f556deeb414625e) — success, block 34042953 · repeated [`0x72df37d9…`](https://coston2-explorer.flare.network/tx/0x72df37d9de01a7aaf73a337a5212e07373fd0ed37b908596cb70bb03cd1e52fe) |
 
-TEE identity for this run: `0xEc7C4CBcbA76f957F898577a6b4712d64c619Ebd` (status `PRODUCTION`, extension
-`66127`). The earlier 2026-08-11 run used the previous deployment and a since-retired identity.
+### Hyperliquid venue — the same encrypted signal, settled on an exchange
+
+Seven live spot fills on Hyperliquid testnet, all placed **by the enclave** with a per-follower agent
+key derived inside it — including a **100% EXIT** that closed the whole position:
+
+```
+account 0xecb5DD…                                  (Hyperliquid testnet, PURR/USDC spot)
+
+  Buy  3.0 PURR @ 4.6252     ← 20% ENTRY published from the UI
+  Sell 5.0 PURR @ 4.5795     ← 100% EXIT published from the UI (closes the position)
+  … (7 fills total; agent 0x05aC7AC2… approved by the follower, expires automatically)
+```
+
+First fill: [`0xf78110e0…`](https://app.hyperliquid-testnet.xyz/explorer/tx/0xf78110e086354473f8fa0426ce612201090028c6213863469b49bc3345391e5e) ·
+the rest are on the account's public fill history. The agent address is **derived in the follower's
+browser** from the enclave's published master key — verified, not trusted.
 
 The demo script **asserts mid-run** that the take-profit and stop-loss cannot be recovered from the
 published bytes. The confidentiality claim is tested, not asserted.
 
 ```bash
-pnpm --filter @sigmax/agent exec tsx scripts/flare-e2e-demo.ts
+pnpm --filter @sigmax/agent demo
 ```
 
 ---
@@ -240,12 +285,23 @@ cd packages/contracts && forge test   # 74 contract tests (needs its own foundry
 
 ### 2. Bring up the enclave
 
+**One command, from cold** — waits out the shared indexer DB, starts the tunnel + containers,
+registers the fresh identity, pauses the retired ones, and rotates the factory/vault:
+
+```bash
+bash fce-sigmax/scripts/bring-up.sh
+```
+
+<details>
+<summary>…or the individual steps it sequences</summary>
+
 ```bash
 cd fce-sigmax
 bash scripts/pre-build.sh --force   # registers an extension id + deploys InstructionSender
 bash scripts/start-services.sh      # tee-node + proxy
 bash scripts/post-build.sh          # registers this machine → status PRODUCTION
 ```
+</details>
 
 > ⚠️ **A simulated enclave mints a fresh signing key on every start**, so after any restart every vault
 > is checking a retired key and *every swap reverts with `BadTeeSignature`* — correct signatures,
@@ -283,7 +339,9 @@ the leader sees a published signal, the enclave logs a success, and the vaults a
 the single easiest thing to forget, so it has its own step.
 
 The Hyperliquid venue needs no keeper — the enclave calls the exchange itself — but it does need its
-agent key injected after every restart (`scripts/hl-inject-key.ts`).
+agent key injected after every restart (`scripts/hl-inject-key.ts`). The nav's TEE pill turns amber
+(**`TEE up · no HL key`**) whenever that step is missing, so the failure is visible instead of a
+silent order rejection.
 
 ### 5. The web app
 
@@ -297,6 +355,18 @@ Everything the demo script does, a user can do from the browser — on Coston2, 
 |---|---|
 | **Leader** | Register a plan in one transaction, then publish a signal. **The encryption happens in the browser** — the take-profit and stop-loss are sealed to the enclave's public key before anything leaves the page, and the leader signs the transaction that carries the ciphertext. No server is involved in the publish path at all. |
 | **Follower** | Subscribe (testUSD, split to the leader at pay time), then create **and fund** their vault in a single signature via `createVaultAndDeposit`. Deposit, withdraw, and every copied trade read straight from their own vault. |
+
+The app is built to stay truthful under flaky testnet infrastructure, because the trust story is
+only as good as what the user can see:
+
+- **`● TEE live` heartbeat** in the nav — polls the enclave's own `/state`; hover for the counters
+  it reports about itself (signals decrypted, authorizations signed, fills, replays rejected).
+- **Live pool ↔ FTSO gap** on the publish form — whether the vault's 1% execution bound can be met
+  is shown *before* gas is spent, because a drifted pool is the one failure that looks like a broken
+  enclave and isn't.
+- **Failover everywhere** — every Coston2 read runs over a multi-RPC `fallback` transport; every
+  enclave read tries the same-origin proxy path then the public tunnel; the publish path re-sends
+  until a dispatch reaches the live machine (stale registrations are a routing lottery).
 
 The leader's registration is one signature here versus four on the venue this replaced, because
 `createPlan` makes the caller the plan's leader — there is no IP asset to mint or license to grant
@@ -335,16 +405,14 @@ FCC extension for the run above: id `0x…1024f` (66127), machine `0x736148d4fC2
 
 ## Tests
 
-**199 passing**, and the ones that matter test the seams where this kind of system fails quietly.
+**293 passing**, and the ones that matter test the seams where this kind of system fails quietly.
 
 | Suite | Count | |
 |---|---|---|
-| Foundry (contracts) | 53 | signature verification, caps, whitelists, replay, deadline, chain binding |
-| Extension (enclave) | 40 | decrypt → size → sign, and that TP/SL never reach a log or the reported state |
+| Foundry (contracts) | 74 | signature verification, caps, whitelists, replay, deadline, chain binding |
+| Extension (enclave) | 104 | decrypt → size → sign, spot-only guard, HL order signing byte-equality, min-notional after lot rounding, and that TP/SL never reach a log or the reported state |
 | Agent / keeper | 69 | relay outcomes, revert-selector table pinned against the ABI |
-| Shared + encryption | 32 | signal codec round-trip, **cross-language ECIES interop** |
-
-<sub>194 of the 199 cover this build; the other 5 belong to packages from an earlier venue.</sub>
+| Shared + encryption | 46 | signal codec round-trip, per-action `sizeBps` ceiling, **cross-language ECIES interop**, browser-receiver `fetch` regression |
 
 Two proofs worth singling out:
 
@@ -355,17 +423,26 @@ Two proofs worth singling out:
   so the core promise is enforced by CI.
 
 ```bash
-pnpm -r test                            # TypeScript (106)
-cd packages/contracts && forge test     # contracts (53)
-cd fce-sigmax/typescript && npm test    # enclave (40)
+pnpm -r test                            # TypeScript (115)
+cd packages/contracts && forge test     # contracts (74)
+cd fce-sigmax/typescript && npm test    # enclave (104)
 ```
 
 ---
 
 ## Honest status
 
-**Proven live on Coston2:** the complete flow — encrypt → publish → subscribe → decrypt in the
-enclave → sign → verify on-chain → swap — with the transactions linked above.
+**Proven live, from the browser (2026-08-13/14):**
+
+- **Flare venue, end to end** — encrypt in the browser → publish → decrypt in the enclave → sign →
+  vault verifies on-chain → swap. Transactions linked above; repeated across multiple enclave
+  restarts and re-registrations.
+- **Hyperliquid venue, end to end** — the follower authorized their enclave-derived agent from the
+  UI, and the enclave placed **seven live spot fills** on a funded testnet account, including a
+  100% EXIT closing the whole position. The spot-only guard held throughout (perp equity stayed
+  0.00 the entire time).
+- **The web app itself** — connected wallet, publish (both venues), authorize, deposit/withdraw
+  reads, leaderboard: driven end to end in a real browser.
 
 **Not yet done, stated plainly:**
 
@@ -374,37 +451,34 @@ enclave → sign → verify on-chain → swap — with the transactions linked a
   difference between "the design is sound" and "the guarantee is enforced by silicon". It is the next
   piece of work, not a detail.
 - Testnet only. No mainnet, no audit.
-- **Hyperliquid is a second venue inside the same enclave** — the encrypted signal, the attested code,
-  and the Coston2 control plane are shared; only settlement differs. It is fully tested offline (101
-  extension tests, including byte-equality of the order signing against the reference SDK) but **has
-  not been run against a live enclave or a funded Hyperliquid account**. What is proven versus what
-  is not is itemised in [`docs/flare/02-hyperliquid-venue.md`](docs/flare/02-hyperliquid-venue.md).
-  Note the guarantee is weaker there and deliberately stated as such: on Flare the *contract* enforces
-  the caps, on Hyperliquid *attested code* does, because Hyperliquid has nothing on-chain to verify a
-  TEE signature against.
 - **Take-profit / stop-loss are decoded inside the enclave and never acted on** — on *either* venue. The
   design is settled (a `tick` instruction, thresholds re-derived from the signal's on-chain ciphertext
   rather than from enclave state, which does not survive a restart) but it is not built. This is the one
   feature gap rather than a rough edge, and it is called out here because everything else in this list is
   an operational caveat.
-- **The contracts are deployed and current** (2026-08-12, addresses below), with a plan and a funded
-  vault seeded so the app shows real on-chain data. `factory.admin()` and `registry.strategyCount()` both
-  respond — on the previous deployment they reverted, which is what stopped the factory following a
-  re-attested enclave and made the leaderboard hang. Redeploying is one command
-  (`pnpm --filter @sigmax/agent deploy:flare`), and it refuses to run while the old factory holds funded
-  vaults, because `vaultOf` does not migrate.
-- **Retired TEE identities must be paused after every restart.** A restart mints a new identity and
-  leaves the old one `PRODUCTION`; dispatch then picks at random, and measured on Coston2 six consecutive
-  publishes all went to the dead one. The manager's `pause(address)` fixes it (the scaffold does not wrap
-  it — the ABI is in the Go module cache), and the publish path retries regardless. See §0a of the
-  [runbook](docs/flare/RUNBOOK.md).
-- **Hyperliquid is configured but unexercised.** The per-trade cap is set, but the enclave reads env only
-  at boot and a restart would mint a new identity — costing the working Flare setup. It also needs a
-  funded exchange testnet account, which is the one prerequisite no amount of code supplies.
-- The web app's contract reads are verified against the live chain (`listPlans` returns the seeded plan),
-  but the app has **not been clicked through end to end** — that needs a running enclave.
+- Note the Hyperliquid guarantee is weaker than Flare's and deliberately stated as such: on Flare the
+  *contract* enforces the caps, on Hyperliquid *attested code* does, because Hyperliquid has nothing
+  on-chain to verify a TEE signature against. Details in
+  [`docs/flare/02-hyperliquid-venue.md`](docs/flare/02-hyperliquid-venue.md).
 - Some of the stack predates this hackathon; `docs/flare/submission.md` separates what was reused,
   ported, and written new.
+
+**Operational truths a demo driver should know** (each mitigated in-product, none abolished):
+
+- **The FCC node gives our handler 2 seconds** (`ProxyTimeout`, a Go constant in `tee-node` — not
+  configurable). The Flare handler races public-RPC latency against it, so roughly 1 publish in 3 is
+  dropped and simply needs republishing; the enclave still reports it processed. The UI's pool-gap
+  line, RPC failover and the keeper's retry all exist because of this ceiling. A private low-latency
+  RPC or a patched node removes it.
+- **Every enclave restart mints a fresh identity and clears the in-memory HL key.**
+  `APPLY=1 …/flare-resync.ts` now pauses the retired identities **automatically**, rotates the
+  factory and vault, and reminds about key re-injection; `bring-up.sh` sequences the whole recovery.
+- **The FXRP/testUSD pool drifts off the FTSO price on its own** (the oracle moves, the pool doesn't).
+  Past ~0.6% above the oracle, entries revert `SwapFailed()` by design — the bound *is* the safety
+  property. The publish form shows the live gap, and `20-rebalance-pool` style rebalancing (sell/buy
+  the small difference) restores headroom in one transaction.
+- **`SIGMAX_SUBS_FROM_BLOCK` must track the newest subscription**, not the deploy block — Coston2
+  mints ~86k blocks/day and a stale value grows back into the 2-second ceiling.
 
 ---
 

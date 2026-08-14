@@ -1,9 +1,28 @@
 import { getDefaultConfig } from "@rainbow-me/rainbowkit";
 import { http } from "wagmi";
 import { arbitrum } from "wagmi/chains";
-import { defineChain } from "viem";
+import { defineChain, fallback } from "viem";
 import { FLARE_COSTON2 } from "@sigmax/shared";
 import { env } from "./env";
+
+/**
+ * Every public Coston2 endpoint fails some of the time — measured across one night: the official
+ * gateway rate-limits, Enosys starts timing out `eth_blockNumber`, Ankr drops bursts. Any one of
+ * them alone eventually turns into an empty leaderboard or a publish that cannot confirm. viem's
+ * `fallback` retries the next transport on failure, so the app stays readable while any single
+ * endpoint is unhappy. The configured RPC stays first — it is the deliberate choice.
+ */
+const coston2Transport = fallback(
+  [
+    env.flareRpcUrl,
+    ...env.flareRpcFallbacks,
+    "https://coston2-api.flare.network/ext/C/rpc",
+    "https://rpc.ankr.com/flare_coston2",
+    "https://coston2.enosys.global/ext/C/rpc",
+  ]
+    .filter((u, i, all) => Boolean(u) && all.indexOf(u) === i)
+    .map((u) => http(u, { timeout: 12_000 })),
+);
 
 /** Story Aeneid (1315) — license/subscribe/IP/CDR chain. */
 export const storyAeneid = defineChain({
@@ -38,7 +57,7 @@ export const wagmiConfig = getDefaultConfig({
   projectId: env.walletConnectProjectId,
   chains: [flareCoston2, storyAeneid, arbitrum],
   transports: {
-    [flareCoston2.id]: http(env.flareRpcUrl),
+    [flareCoston2.id]: coston2Transport,
     [storyAeneid.id]: http(env.storyRpcUrl),
     [arbitrum.id]: http(env.liquidityRpcUrl),
   },

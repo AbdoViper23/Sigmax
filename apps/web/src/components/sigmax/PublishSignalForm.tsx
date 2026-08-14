@@ -24,17 +24,20 @@ import { TxButton } from "./TxButton";
 import { cn } from "@/lib/utils";
 import { useHlMarkets } from "@/hooks/hyperliquid";
 import { displayName, type MarketInfo } from "@/lib/hyperliquid/markets";
-import type { SignalVenueT } from "@sigmax/shared";
+import { maxSizeBps, type SignalVenueT } from "@sigmax/shared";
 import { VenueSummary, asBadgeVenue, type BadgeVenue } from "./VenueBadge";
 import {
+  AlertTriangle,
   ArrowDownRight,
   ArrowUpRight,
   Check,
+  CheckCircle2,
   ChevronsUpDown,
   ExternalLink,
   Lock,
   ShieldCheck,
 } from "lucide-react";
+import { usePoolOracleGap } from "@/hooks/systemStatus";
 
 export interface PublishSignalFormProps {
   /** Tokens selectable for the on-chain venues; must be a subset of what the vault whitelists. */
@@ -83,6 +86,16 @@ const VENUES: { value: BadgeVenue; label: string }[] = [
 
 const EXPIRY_PRESETS = [6, 24, 48] as const;
 
+/**
+ * Size ceiling as a percentage, straight from the signal schema's bound so the slider, this form's
+ * validation and the enclave's decoder cannot disagree. They did once: the slider allowed 100% for
+ * an exit while validation still rejected anything over 20, and the only symptom was a "Fix
+ * validation errors" toast with no field marked.
+ */
+function maxSizePercent(action: "ENTRY" | "EXIT"): number {
+  return maxSizeBps(action) / 100;
+}
+
 /** Accessible segmented control: radio semantics + visible focus, active option in solid ink. */
 function Segmented<T extends string>({
   value,
@@ -119,6 +132,38 @@ function Segmented<T extends string>({
   );
 }
 
+/**
+ * Live pool↔FTSO gap for the Flare venue. Every vault bounds `minOut` to the FTSO price ±1%, and a
+ * buy pays the gap + the 0.3% AMM fee + impact — so a pool sitting ~0.9% above the oracle makes
+ * every entry revert `SwapFailed()` while looking like a broken enclave. Showing the number at the
+ * moment of publishing turns the most confusing failure in the system into a visible pre-condition.
+ */
+function PoolGapLine() {
+  const { gap, loading } = usePoolOracleGap();
+  if (loading) {
+    return <div className="h-4 w-56 animate-pulse rounded bg-muted" aria-hidden />;
+  }
+  if (!gap) return null;
+
+  const sign = gap.gapPct >= 0 ? "+" : "";
+  const ok = gap.entryLikelyExecutes;
+  return (
+    <p className={cn("flex items-center gap-1.5 text-xs", ok ? "text-muted-foreground" : "text-warning")}>
+      {ok ? (
+        <CheckCircle2 className="h-3.5 w-3.5 text-success" aria-hidden />
+      ) : (
+        <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
+      )}
+      <span>
+        Pool ↔ FTSO oracle gap <span className="font-mono tabular-nums">{sign}{gap.gapPct.toFixed(2)}%</span>
+        {ok
+          ? " — inside the 1% execution bound"
+          : " — an entry may revert; the pool needs rebalancing toward the oracle"}
+      </span>
+    </p>
+  );
+}
+
 /** Small uppercase rhythm marker separating the form's three concerns. */
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
@@ -137,10 +182,12 @@ export function PublishSignalForm({
   const [s, setS] = useState(initialState);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  const sizeMax = maxSizePercent(s.action);
+
   function validate() {
     const e: Record<string, string> = {};
     if (!s.token) e.token = "Pick a token";
-    if (s.sizePercent < 1 || s.sizePercent > 20) e.sizePercent = "1–20%";
+    if (s.sizePercent < 1 || s.sizePercent > sizeMax) e.sizePercent = `1–${sizeMax}%`;
     for (const k of ["maxEntryPrice", "takeProfitPrice", "stopLossPrice"] as const) {
       if (s[k] && Number(s[k]) < 0) e[k] = "Must be ≥ 0";
     }
@@ -209,7 +256,10 @@ export function PublishSignalForm({
                 <Segmented
                   label="Action"
                   value={s.action}
-                  onChange={(action) => setS({ ...s, action })}
+                  // Coming back from a 100% exit must clamp, or the slider sits outside its range.
+                  onChange={(action) =>
+                    setS({ ...s, action, sizePercent: Math.min(s.sizePercent, maxSizePercent(action)) })
+                  }
                   options={[
                     {
                       value: "ENTRY",
@@ -241,6 +291,9 @@ export function PublishSignalForm({
               {/* Restating where this settles and what enforces it, at the moment of choosing —
                   the two venues do not offer the same guarantee, so the choice is not cosmetic. */}
               {asBadgeVenue(s.venue) && <VenueSummary venue={asBadgeVenue(s.venue)!} />}
+              {/* Live execution-feasibility check — surfaces the one condition that makes a Flare
+                  swap revert (pool drifted off the FTSO bound) BEFORE the leader spends gas. */}
+              {s.venue === "flare" && <PoolGapLine />}
             </div>
 
             {/* Market / token */}
@@ -291,11 +344,13 @@ export function PublishSignalForm({
                 value={[s.sizePercent]}
                 onValueChange={(v) => setS({ ...s, sizePercent: v[0] })}
                 min={1}
-                max={20}
+                max={sizeMax}
                 step={1}
               />
               <p className="text-xs text-muted-foreground">
-                {s.sizePercent}% of each follower's vault goes into this trade.
+                {s.action === "EXIT"
+                  ? `${s.sizePercent}% of each follower's position is sold.`
+                  : `${s.sizePercent}% of each follower's vault goes into this trade.`}
               </p>
             </div>
 

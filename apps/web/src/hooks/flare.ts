@@ -17,6 +17,7 @@ import { formatUnits, parseUnits, zeroAddress, type Hex } from "viem";
 import { EnclaveSignalSealer, ProxyEnclaveKeySource, addressFromPublicKey } from "@sigmax/enclave-crypto";
 import { PRICE_SCALE, type Signal, type SignalVenueT } from "@sigmax/shared";
 import { env, flareConfigReady } from "../lib/env";
+import { proxyFetch } from "../lib/enclave";
 
 /**
  * What `PublishSignalForm` emits. Defined here rather than imported from the legacy Story hooks so
@@ -70,7 +71,8 @@ function makeCdr(): EnclaveSignalSealer {
   if (!env.flareProxyUrl) {
     throw new Error("VITE_FLARE_PROXY_URL is not set — cannot fetch the enclave key to encrypt against");
   }
-  return new EnclaveSignalSealer(new ProxyEnclaveKeySource(env.flareProxyUrl));
+  // proxyFetch retries every configured proxy base, so one dead route cannot block encryption.
+  return new EnclaveSignalSealer(new ProxyEnclaveKeySource(env.flareProxyUrl, proxyFetch));
 }
 
 let cdrInstance: EnclaveSignalSealer | null = null;
@@ -94,6 +96,13 @@ const TEE_INSTRUCTIONS_SENT_TOPIC =
 
 /** Give up rather than spend a leader's gas forever if every machine registered is dead. */
 const MAX_PUBLISH_ATTEMPTS = 12;
+
+/**
+ * Fee forwarded to the FCC extension registry with each instruction. Matches `DefaultFee` in the
+ * scaffold and the value the agent scripts pay; nothing exposes it as a getter, so it is a constant
+ * on both sides. 1e12 wei = 0.000001 C2FLR.
+ */
+const INSTRUCTION_FEE_WEI = 1_000_000_000_000n;
 
 /**
  * Did this publish get routed to the enclave that is actually running?
@@ -163,6 +172,10 @@ export function useFlarePublishSignal(strategyIdArg?: Hex) {
           args: [strategyId as Hex, "", ciphertext],
           chain: walletClient.chain,
           account: address,
+          // `publishSignal` forwards msg.value on as the FCC instruction fee. Sending 0 reverts the
+          // whole publish, which is what made the button fail with no usable reason. There is no
+          // on-chain getter for the amount, so this mirrors the value the agent scripts pay.
+          value: INSTRUCTION_FEE_WEI,
         });
 
         if (!liveTee || !publicClient) break;
