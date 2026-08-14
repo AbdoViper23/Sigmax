@@ -64,7 +64,7 @@ function StrategyDetail({ leader, id }: { leader: Leader; id: string }) {
   }));
 
   // Registry read wins; the PlanCreated price is the fallback while it loads.
-  const price = Number(sub.monthlyPrice) > 0 ? sub.monthlyPrice : leader.monthlyPriceWip;
+  const price = Number(sub.monthlyPrice) > 0 ? sub.monthlyPrice : leader.monthlyPrice;
 
   const subscribeArea = (
     <NetworkSwitchPrompt
@@ -74,7 +74,7 @@ function StrategyDetail({ leader, id }: { leader: Leader; id: string }) {
     >
       <SubscribeCard
         strategyName={displayName}
-        monthlyPriceWip={price}
+        monthlyPrice={price}
         status={sub.active ? "active" : "idle"}
         activeUntil={sub.expiresAt > 0 ? new Date(sub.expiresAt * 1000).toISOString() : undefined}
         pendingLabel="Subscribing…"

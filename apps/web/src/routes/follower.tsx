@@ -38,7 +38,7 @@ import {
   type MyFlareSubscription,
 } from "@/hooks/flareControlPlane";
 import { useAgentApproval, useApproveAgent, useHlAgentAddress } from "@/hooks/hyperliquid";
-import { env } from "@/lib/env";
+import { env, QUOTE_SYMBOL } from "@/lib/env";
 
 export const Route = createFileRoute("/follower")({
   head: () => ({
@@ -52,8 +52,6 @@ export const Route = createFileRoute("/follower")({
   }),
   component: DashboardPage,
 });
-
-const QUOTE_SYMBOL = "testUSD";
 
 /** Human label for whichever leg a vault action targets. */
 const legLabel = (leg: VaultLeg) => (leg === "fxrp" ? "FXRP" : QUOTE_SYMBOL);
@@ -403,7 +401,10 @@ function SubscriptionRow({ sub }: { sub: MyFlareSubscription }) {
           </div>
           <p className="truncate text-xs text-muted-foreground">
             @{sub.leader.username} ·{" "}
-            <span className="font-mono tabular-nums">{sub.leader.monthlyPriceWip} WIP</span>/mo
+            <span className="font-mono tabular-nums">
+              {sub.leader.monthlyPrice} {QUOTE_SYMBOL}
+            </span>
+            /mo
           </p>
         </div>
         <div className="hidden text-right sm:block">

@@ -10,7 +10,7 @@ export const mockTx = async () => {
 };
 
 export const mockStrategy = {
-  monthlyPriceWip: "5",
+  monthlyPrice: "5",
 };
 
 export const mockSubscription = {
@@ -74,7 +74,7 @@ export const mockLeaders: Leader[] = [
     leaderAddress: "0xA11ce0000000000000000000000000000000A11c",
     username: "momentum_alpha",
     displayName: "Momentum Alpha",
-    monthlyPriceWip: "5",
+    monthlyPrice: "5",
     bio: "Trend-following spot rotations across blue-chip majors. Commit-before-outcome, every signal.",
     performance: {
       verifiedReturnPct: 42.6,
@@ -89,7 +89,7 @@ export const mockLeaders: Leader[] = [
     leaderAddress: "0xB0b0000000000000000000000000000000000B0b",
     username: "steady_yield",
     displayName: "Steady Yield",
-    monthlyPriceWip: "3",
+    monthlyPrice: "3",
     bio: "Low-volatility accumulation. Smaller swings, consistent compounding.",
     performance: {
       verifiedReturnPct: 18.4,
@@ -104,7 +104,7 @@ export const mockLeaders: Leader[] = [
     leaderAddress: "0xCa110000000000000000000000000000000000Ca",
     username: "deep_value",
     displayName: "Deep Value",
-    monthlyPriceWip: "8",
+    monthlyPrice: "8",
     bio: "Contrarian entries on oversold majors. Patience over frequency.",
     performance: {
       verifiedReturnPct: -6.2,
@@ -119,7 +119,7 @@ export const mockLeaders: Leader[] = [
     leaderAddress: "0xDee0000000000000000000000000000000000Dee",
     username: "breakout_hunter",
     displayName: "Breakout Hunter",
-    monthlyPriceWip: "6",
+    monthlyPrice: "6",
     bio: "Volatility-expansion entries. Tight risk, asymmetric upside.",
     performance: {
       verifiedReturnPct: 27.9,
@@ -134,7 +134,7 @@ export const mockLeaders: Leader[] = [
     leaderAddress: "0xEf00000000000000000000000000000000000Ef0",
     username: "fresh_desk",
     displayName: "Fresh Desk",
-    monthlyPriceWip: "2",
+    monthlyPrice: "2",
     bio: "New leader building a track record. Fewer than 10 closed trades so far.",
     performance: {
       verifiedReturnPct: null,
@@ -273,7 +273,7 @@ export const testLeaders: Leader[] = [
     leaderAddress: "0xF100000000000000000000000000000000000F01",
     username: "aurora_test",
     displayName: "Aurora (Test)",
-    monthlyPriceWip: "4",
+    monthlyPrice: "4",
     bio: "Seeded test leader — momentum rotations on majors. Use to demo the marketplace + track record.",
     performance: {
       verifiedReturnPct: 34.8,
@@ -289,7 +289,7 @@ export const testLeaders: Leader[] = [
     leaderAddress: "0xF200000000000000000000000000000000000F02",
     username: "nova_test",
     displayName: "Nova (Test)",
-    monthlyPriceWip: "7",
+    monthlyPrice: "7",
     bio: "Seeded test leader — higher-variance breakout entries. Fake data for UI/demo only.",
     performance: {
       verifiedReturnPct: 21.3,
@@ -305,7 +305,7 @@ export const testLeaders: Leader[] = [
     leaderAddress: "0xF300000000000000000000000000000000000F03",
     username: "zephyr_test",
     displayName: "Zephyr (Test)",
-    monthlyPriceWip: "3",
+    monthlyPrice: "3",
     bio: "Seeded test leader — conservative accumulation. Fake data for UI/demo only.",
     performance: {
       verifiedReturnPct: -4.1,

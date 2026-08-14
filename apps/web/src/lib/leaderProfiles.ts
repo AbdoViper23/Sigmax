@@ -12,7 +12,7 @@ export interface LeaderProfile {
   displayName: string;
   bio?: string;
   /** Monthly price entered at registration (mirrors plan.monthlyPrice once on-chain). */
-  monthlyPriceWip?: string;
+  monthlyPrice?: string;
 }
 
 const keyFor = (strategyId: string) => `sigmax:leader-profile:${strategyId.toLowerCase()}`;

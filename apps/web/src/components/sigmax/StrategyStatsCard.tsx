@@ -1,13 +1,17 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { QUOTE_SYMBOL } from "@/lib/env";
 
 export interface StrategyStatsCardProps {
   subscribers: number;
   signalsPublished: number;
   verifiedReturnPct: number | null;
-  /** Cumulative leader take in $WIP — already transferred to the leader on each subscribe (no claim). */
-  totalEarnedWip: string;
+  /**
+   * Cumulative leader take, denominated in the plan's pay token (`QUOTE_SYMBOL`) — already
+   * transferred to the leader on each subscribe, so there is no claim step.
+   */
+  totalEarned: string;
 }
 
 function Stat({ label, value, className }: { label: string; value: string; className?: string }) {
@@ -23,7 +27,7 @@ export function StrategyStatsCard({
   subscribers,
   signalsPublished,
   verifiedReturnPct,
-  totalEarnedWip,
+  totalEarned,
 }: StrategyStatsCardProps) {
   const fresh = subscribers === 0 && signalsPublished === 0;
   return (
@@ -50,7 +54,11 @@ export function StrategyStatsCard({
                   : "text-danger"
             }
           />
-          <Stat label="Total earned" value={`${totalEarnedWip} WIP`} className="text-success" />
+          <Stat
+            label="Total earned"
+            value={`${totalEarned} ${QUOTE_SYMBOL}`}
+            className="text-success"
+          />
         </div>
         {fresh ? (
           <p className="flex items-start gap-1.5 text-xs text-muted-foreground">

@@ -11,7 +11,7 @@ import { StrategyStatsCard } from "@/components/sigmax/StrategyStatsCard";
 import { NetworkSwitchPrompt } from "@/components/sigmax/NetworkSwitchPrompt";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { flareConfigReady, env, flarePublishableTokens } from "@/lib/env";
+import { flareConfigReady, env, flarePublishableTokens, QUOTE_SYMBOL } from "@/lib/env";
 import { useNetwork } from "@/hooks/useNetwork";
 import { useFlarePublish } from "@/hooks/flare";
 import { useFlareLeaders, useFlarePlan } from "@/hooks/flareControlPlane";
@@ -87,7 +87,7 @@ function Shell({ children, journeyStep }: { children: React.ReactNode; journeySt
         </h1>
         <p className="max-w-2xl text-sm text-muted-foreground">
           {journeyStep === 0
-            ? "Register once — your wallet creates a Story IP for your strategy and grants the agent a license to execute. Then publish encrypted signals; revenue is paid to your wallet automatically."
+            ? "Register once — a single transaction on Flare Coston2 creates your subscription plan and makes you its leader. Then publish encrypted signals; revenue is paid to your wallet automatically."
             : "Publish encrypted signals below. Followers copy each trade in their own vaults — your thresholds stay sealed, and revenue streams to your wallet on every subscribe & renewal."}
         </p>
         <JourneyRail current={journeyStep} />
@@ -152,7 +152,7 @@ function LockedPublish() {
       <div className="pointer-events-none select-none opacity-50">
         <PublishSignalForm
           tokenOptions={flarePublishableTokens}
-          flareQuoteSymbol="testUSD"
+          flareQuoteSymbol={QUOTE_SYMBOL}
           publishing={false}
           onPublish={async () => {}}
         />
@@ -206,9 +206,9 @@ function LeaderLive() {
         >
           <RegisterStrategyCard
             registered={registered}
-            ipId={myId}
+            strategyId={myId}
             onRegister={async (v) => {
-              await plan.createPlan({ ...v, monthlyPrice: v.monthlyPriceWip });
+              await plan.createPlan(v);
               await qc.invalidateQueries({ queryKey: ["flare-leaders"] });
               toast.success(`Registered as "${v.displayName}"`);
             }}
@@ -221,7 +221,7 @@ function LeaderLive() {
             subscribers={mine?.subscribers ?? 0}
             signalsPublished={signals.length}
             verifiedReturnPct={mine?.performance.verifiedReturnPct ?? null}
-            totalEarnedWip={earnedFromSubscribers(mine?.subscribers ?? 0, plan.monthlyPrice)}
+            totalEarned={earnedFromSubscribers(mine?.subscribers ?? 0, plan.monthlyPrice)}
           />
         ) : (
           <WhatYouGetCard />
@@ -237,7 +237,7 @@ function LeaderLive() {
           >
             <PublishSignalForm
               tokenOptions={flarePublishableTokens}
-              flareQuoteSymbol="testUSD"
+              flareQuoteSymbol={QUOTE_SYMBOL}
               publishing={publishing}
               lastPublished={lastPublished}
               onPublish={async (v) => {
@@ -300,7 +300,7 @@ function LeaderMock() {
           className="animate-enter rounded-lg border border-dashed bg-muted/30 p-4 text-sm text-muted-foreground"
           style={{ animationDelay: "40ms" }}
         >
-          Demo mode — connect your wallet on Story Aeneid to register for real. You can still walk
+          Demo mode — connect your wallet on Flare Coston2 to register for real. You can still walk
           the flow below.
         </div>
       )}
@@ -326,7 +326,7 @@ function LeaderMock() {
         ) : (
           <RegisterStrategyCard
             registered={false}
-            ipId={undefined}
+            strategyId={undefined}
             onRegister={async (v) => {
               await mockTx();
               setProfile({ username: v.username, displayName: v.displayName });
@@ -340,7 +340,7 @@ function LeaderMock() {
             subscribers={0}
             signalsPublished={0}
             verifiedReturnPct={null}
-            totalEarnedWip="0"
+            totalEarned="0"
           />
         ) : (
           <WhatYouGetCard />
@@ -351,7 +351,7 @@ function LeaderMock() {
         {registered ? (
           <PublishSignalForm
             tokenOptions={flarePublishableTokens}
-            flareQuoteSymbol="testUSD"
+            flareQuoteSymbol={QUOTE_SYMBOL}
             publishing={false}
             onPublish={async (v) => {
               await mockTx();

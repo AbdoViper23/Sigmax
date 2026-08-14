@@ -156,7 +156,7 @@ export function useFlareLeaders(): { leaders: Leader[]; loading: boolean } {
             // the strategy page fetches the real label with a single indexed filter.
             username: id.slice(2, 10).toLowerCase(),
             displayName: `Strategy ${id.slice(0, 6)}…${id.slice(-4)}`,
-            monthlyPriceWip: formatToken(plan.monthlyPrice),
+            monthlyPrice: formatToken(plan.monthlyPrice),
             // Filled in by useFlareLeaderStats, which runs per leader and does not block this list.
             performance: {
               verifiedReturnPct: null,

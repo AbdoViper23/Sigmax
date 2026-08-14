@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { TxButton } from "./TxButton";
 import { cn } from "@/lib/utils";
+import { QUOTE_SYMBOL } from "@/lib/env";
 import { ArrowUpRight, Check, Copy, Loader2 } from "lucide-react";
 
 /** Multi-tx on-chain registration progress: steps before `current` are done, `current` is in flight. */
@@ -15,13 +16,17 @@ export interface RegisterProgress {
 
 export interface RegisterStrategyCardProps {
   registered: boolean;
-  ipId?: string;
+  /**
+   * The leader's strategy id. On Coston2 that is simply their own address — `createPlan` makes the
+   * caller the leader, so there is no IP asset to mint first as the Story path required.
+   */
+  strategyId?: string;
   // username/displayName are OFF-CHAIN profile fields (PlanCreated carries no name) — do NOT pass
   // them to createPlan. They're stored via lib/leaderProfiles.ts (see the wiring seam).
   onRegister: (v: {
     username: string;
     displayName: string;
-    monthlyPriceWip: string;
+    monthlyPrice: string;
   }) => Promise<void>;
   /** Live on-chain registration progress; rendered as a checklist under the button while in flight. */
   progress?: RegisterProgress;
@@ -31,13 +36,13 @@ const PLATFORM_FEE_PCT = 15;
 const USERNAME_RE = /^[a-z0-9_]{3,20}$/;
 
 /** "4.25" not "4.250000" — trims trailing zeros from the earnings math. */
-function fmtWip(n: number) {
+function fmtAmount(n: number) {
   return n.toFixed(2).replace(/\.?0+$/, "");
 }
 
 export function RegisterStrategyCard({
   registered,
-  ipId,
+  strategyId,
   onRegister,
   progress,
 }: RegisterStrategyCardProps) {
@@ -51,7 +56,7 @@ export function RegisterStrategyCard({
   const valid = usernameValid && displayName.trim().length > 0 && Number(price) > 0;
   const keepPerSub = Number(price) > 0 ? Number(price) * (1 - PLATFORM_FEE_PCT / 100) : 0;
 
-  if (registered && ipId) {
+  if (registered && strategyId) {
     return (
       <Card>
         <CardHeader>
@@ -61,22 +66,22 @@ export function RegisterStrategyCard({
             </span>
             <CardTitle>Strategy registered</CardTitle>
           </div>
-          <CardDescription>Your IP asset is live on Story Aeneid.</CardDescription>
+          <CardDescription>Your subscription plan is live on Flare Coston2.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <div>
-            <Label className="text-xs text-muted-foreground">IP Asset ID</Label>
+            <Label className="text-xs text-muted-foreground">Strategy ID</Label>
             <div className="mt-1 flex items-center gap-1 rounded-md border border-border bg-muted/40 py-1 pl-3 pr-1">
-              <code className="flex-1 truncate font-mono text-sm">{ipId}</code>
+              <code className="flex-1 truncate font-mono text-sm">{strategyId}</code>
               <button
                 type="button"
                 onClick={() => {
-                  navigator.clipboard?.writeText(ipId);
+                  navigator.clipboard?.writeText(strategyId);
                   setCopied(true);
                   setTimeout(() => setCopied(false), 1500);
                 }}
                 className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                aria-label={copied ? "Copied" : "Copy IP asset ID"}
+                aria-label={copied ? "Copied" : "Copy strategy ID"}
               >
                 {copied ? <Check className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}
               </button>
@@ -84,7 +89,7 @@ export function RegisterStrategyCard({
           </div>
           <Link
             to="/strategy/$id"
-            params={{ id: ipId }}
+            params={{ id: strategyId }}
             className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           >
             View your public page <ArrowUpRight className="h-3.5 w-3.5" />
@@ -99,8 +104,8 @@ export function RegisterStrategyCard({
       <CardHeader>
         <CardTitle>Register your strategy</CardTitle>
         <CardDescription>
-          Pick a handle, name your strategy, and set your monthly price. Registering creates your IP
-          asset on Story Aeneid and unlocks signal publishing.
+          Pick a handle, name your strategy, and set your monthly price. Registering creates your
+          subscription plan on Flare Coston2 and unlocks signal publishing.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -135,7 +140,7 @@ export function RegisterStrategyCard({
         <div className="space-y-1.5">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label htmlFor="strat-price">Monthly price ($WIP)</Label>
+              <Label htmlFor="strat-price">Monthly price ({QUOTE_SYMBOL})</Label>
               <Input
                 id="strat-price"
                 type="number"
@@ -158,7 +163,7 @@ export function RegisterStrategyCard({
               <>
                 You keep{" "}
                 <span className="font-mono font-medium tabular-nums text-foreground">
-                  {fmtWip(keepPerSub)} WIP
+                  {fmtAmount(keepPerSub)} {QUOTE_SYMBOL}
                 </span>
                 /mo per subscriber, paid to your wallet automatically.
               </>
@@ -175,7 +180,7 @@ export function RegisterStrategyCard({
             onRegister({
               username: normalizedUsername,
               displayName: displayName.trim(),
-              monthlyPriceWip: price,
+              monthlyPrice: price,
             })
           }
         />

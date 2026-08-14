@@ -3,10 +3,11 @@ import { Link } from "@tanstack/react-router";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { TxButton } from "./TxButton";
 import { SubscriptionStatusBadge } from "./SubscriptionStatusBadge";
+import { QUOTE_SYMBOL } from "@/lib/env";
 
 export interface SubscribeCardProps {
   strategyName: string;
-  monthlyPriceWip: string;
+  monthlyPrice: string;
   status: "idle" | "subscribing" | "active";
   activeUntil?: string;
   onSubscribe: () => Promise<void>;
@@ -18,7 +19,7 @@ export interface SubscribeCardProps {
 
 export function SubscribeCard({
   strategyName,
-  monthlyPriceWip,
+  monthlyPrice,
   status,
   activeUntil,
   onSubscribe,
@@ -44,8 +45,8 @@ export function SubscribeCard({
       <CardContent className="space-y-5">
         {/* Price block — the monthly cost, front and center */}
         <div className="flex items-baseline gap-2 rounded-lg border border-border bg-muted/30 px-4 py-3">
-          <span className="font-mono text-3xl font-semibold tabular-nums">{monthlyPriceWip}</span>
-          <span className="text-sm font-medium text-foreground">$WIP</span>
+          <span className="font-mono text-3xl font-semibold tabular-nums">{monthlyPrice}</span>
+          <span className="text-sm font-medium text-foreground">{QUOTE_SYMBOL}</span>
           <span className="text-sm text-muted-foreground">/ month</span>
         </div>
         <ul className="space-y-2 text-sm text-muted-foreground">

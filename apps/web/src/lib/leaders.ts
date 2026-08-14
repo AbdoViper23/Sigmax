@@ -26,7 +26,7 @@ export interface Leader {
   /** Off-chain human title, e.g. "Momentum Alpha". */
   displayName: string;
   /** Human string; on-chain later as plan.monthlyPrice. */
-  monthlyPriceWip: string;
+  monthlyPrice: string;
   bio?: string;
   performance: LeaderPerformance;
   subscribers: number;
@@ -56,7 +56,7 @@ export function sortLeaders(leaders: Leader[], by: LeaderSort): Leader[] {
     case "subscribers":
       return arr.sort((a, b) => b.subscribers - a.subscribers);
     case "price":
-      return arr.sort((a, b) => Number(a.monthlyPriceWip) - Number(b.monthlyPriceWip));
+      return arr.sort((a, b) => Number(a.monthlyPrice) - Number(b.monthlyPrice));
     case "return":
     default:
       // nulls last, then descending verified return

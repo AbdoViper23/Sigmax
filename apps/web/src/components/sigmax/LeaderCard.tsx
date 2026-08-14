@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { TestBadge } from "./TestBadge";
 import { cn } from "@/lib/utils";
 import { useFlareLeaderStats, useFlareSubscription } from "@/hooks/flareControlPlane";
+import { QUOTE_SYMBOL } from "@/lib/env";
 import type { Leader } from "@/lib/leaders";
 
 /** Monogram seeded from the leader handle — same square-badge idiom as the Nav logo. */
@@ -79,7 +80,7 @@ export function LeaderCard({ leader }: { leader: Leader }) {
             <p className="truncate text-xs text-muted-foreground">@{username}</p>
           </div>
           <span className="shrink-0 rounded-full border border-border bg-muted/40 px-2.5 py-1 font-mono text-xs tabular-nums">
-            {leader.monthlyPriceWip} WIP<span className="text-muted-foreground">/mo</span>
+            {leader.monthlyPrice} {QUOTE_SYMBOL}<span className="text-muted-foreground">/mo</span>
           </span>
         </div>
 

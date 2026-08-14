@@ -122,6 +122,14 @@ export const env = {
   },
 } as const;
 
+/**
+ * Ticker of the subscription pay token AND the quote leg of every swap — the token `flareQuoteToken`
+ * points at. Every price label in the UI reads THIS, never a literal: the app used to print "$WIP"
+ * (the Story-era token) while `createPlan`/`subscribe` transacted in testUSD, so the price a follower
+ * read was denominated in a token that is not on this chain at all.
+ */
+export const QUOTE_SYMBOL = "testUSD";
+
 /** True only when the per-deployment addresses are present → use real hooks; else fall back to mock. */
 export const chainConfigReady = Boolean(
   env.registryAddress && env.factoryAddress && env.strategyIpId && env.agentAddress,
