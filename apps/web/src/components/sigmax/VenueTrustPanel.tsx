@@ -28,17 +28,13 @@ type ColumnKey = BadgeVenue | PlannedKey;
 interface PlannedVenue {
   key: PlannedKey;
   label: string;
-  /**
-   * Position in the queue. Deliberately "Next" / "After that" rather than "Phase 2" / "Phase 3":
-   * a numbered phase reads as a dated commitment and invites the question of which phase we are in
-   * now, while the ordering is the only thing we actually want to convey.
-   */
+  /** Position in the delivery queue — Sui DeepBook first, Arbitrum Uniswap after it. */
   when: string;
 }
 
 const PLANNED: PlannedVenue[] = [
-  { key: "sui", label: "Sui DeepBook", when: "Next" },
-  { key: "arbitrum", label: "Arbitrum Uniswap", when: "After that" },
+  { key: "sui", label: "Sui DeepBook", when: "Phase 1" },
+  { key: "arbitrum", label: "Arbitrum Uniswap", when: "Phase 2" },
 ];
 
 interface Row {
@@ -117,7 +113,7 @@ export function VenueTrustPanel({
 }) {
   /** The rule that separates shipped from planned. Applied to the first planned column only. */
   const splitCell = (i: number) =>
-    cn("py-3 pr-4 align-top text-muted-foreground", i === 0 && "border-l border-dashed border-border pl-4");
+    cn("py-3 pr-3 align-top text-muted-foreground", i === 0 && "border-l border-dashed border-border pl-3");
 
   return (
     <Card>
@@ -131,21 +127,32 @@ export function VenueTrustPanel({
         </CardHeader>
       )}
       <CardContent className={bare ? "pt-6" : undefined}>
-        {/* A table, because the whole point is a column-by-column comparison. Scrolls inside itself on
-            narrow screens so the page body never scrolls sideways. */}
+        {/* A table, because the whole point is a column-by-column comparison.
+            `table-fixed` + explicit column widths is what keeps five columns inside the card: the
+            default auto layout sizes to the longest cell, which pushed the table past any container
+            it was put in and forced a sideways scroll on desktop. Fixed columns wrap the text
+            instead. The min-width is a legibility floor for phones only — above it, the table always
+            fits and the scroller never engages. */}
         <div className="-mx-2 overflow-x-auto px-2">
-          <table className="w-full min-w-[48rem] border-collapse text-sm">
+          <table className="w-full min-w-[40rem] table-fixed border-collapse text-sm">
             <caption className="sr-only">
               Comparison of confidentiality, enforcement, verification and withdrawal guarantees per
               execution venue, for the two live venues and the two planned ones
             </caption>
+            <colgroup>
+              <col className="w-[24%]" />
+              <col className="w-[19%]" />
+              <col className="w-[19%]" />
+              <col className="w-[19%]" />
+              <col className="w-[19%]" />
+            </colgroup>
             <thead>
               <tr className="border-b border-border">
-                <th scope="col" className="py-2 pr-4 text-left font-medium text-muted-foreground">
+                <th scope="col" className="py-2 pr-3 text-left font-medium text-muted-foreground">
                   Property
                 </th>
                 {venues.map((v) => (
-                  <th key={v} scope="col" className="py-2 pr-4 text-left">
+                  <th key={v} scope="col" className="py-2 pr-3 text-left">
                     <VenueBadge venue={v} />
                   </th>
                 ))}
@@ -154,8 +161,8 @@ export function VenueTrustPanel({
                     key={p.key}
                     scope="col"
                     className={cn(
-                      "py-2 pr-4 text-left",
-                      i === 0 && "border-l border-dashed border-border pl-4",
+                      "py-2 pr-3 text-left",
+                      i === 0 && "border-l border-dashed border-border pl-3",
                     )}
                   >
                     <PlannedHeader venue={p} />
@@ -170,7 +177,7 @@ export function VenueTrustPanel({
                   <tr key={row.label} className="border-b border-border/60 last:border-0">
                     <th
                       scope="row"
-                      className="py-3 pr-4 text-left font-normal text-muted-foreground align-top"
+                      className="py-3 pr-3 text-left font-normal text-muted-foreground align-top"
                     >
                       <span className="flex items-start gap-2">
                         <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
@@ -178,7 +185,7 @@ export function VenueTrustPanel({
                       </span>
                     </th>
                     {venues.map((v) => (
-                      <td key={v} className="py-3 pr-4 align-top">
+                      <td key={v} className="py-3 pr-3 align-top">
                         {row.cells[v]}
                       </td>
                     ))}

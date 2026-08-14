@@ -183,7 +183,10 @@ function Index() {
           two venues" is the architectural claim, and stating the difference in guarantee openly is more
           convincing than implying they are identical. */}
       <section className="border-t border-border">
-        <div className="mx-auto max-w-3xl px-4 py-16 md:py-20">
+        {/* max-w-6xl to match every other section — and because the venue table now has five columns,
+            which do not fit a 3xl measure without a sideways scroll. The heading and lede keep their
+            own narrower max-widths, so the reading measure is unchanged. */}
+        <div className="mx-auto max-w-6xl px-4 py-16 md:py-20">
           <h2 className="max-w-2xl text-3xl font-semibold tracking-tight md:text-4xl">
             Two venues live. We'll tell you which one is stronger.
           </h2>
