@@ -185,12 +185,13 @@ function Index() {
       <section className="border-t border-border">
         <div className="mx-auto max-w-3xl px-4 py-16 md:py-20">
           <h2 className="max-w-2xl text-3xl font-semibold tracking-tight md:text-4xl">
-            Two venues. We'll tell you which one is stronger.
+            Two venues live. We'll tell you which one is stronger.
           </h2>
           <p className="mt-3 max-w-[65ch] text-muted-foreground">
             The same sealed signal and the same enclave settle either on-chain or on an order book. On
             Flare a contract refuses a bad trade; on Hyperliquid attested code does. Those are not equal,
-            so the table below says so instead of implying they are.
+            so the table below says so instead of implying they are — and it shows the two venues we're
+            adding next, whose columns read the same because a new venue never touches the trust model.
           </p>
           <div ref={venuePanel} className="mt-10">
             <VenueTrustPanel bare />
