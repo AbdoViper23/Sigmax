@@ -47,15 +47,39 @@ export interface EnclaveKeySource {
   fetchPublicKey(): Promise<string>;
 }
 
+/**
+ * Headers every browser call to the ext-proxy needs.
+ *
+ * The demo proxy is published through an ngrok tunnel, and ngrok answers browser-looking requests
+ * (i.e. any request carrying a browser `User-Agent`) with an HTML interstitial instead of the
+ * upstream response — status 200, so it fails as a JSON parse error rather than an HTTP error. Node
+ * never sees it, which is why the CLI path worked while the web app could not fetch the key at all.
+ * The header is inert against a proxy that is not behind ngrok.
+ */
+export const PROXY_FETCH_HEADERS = { "ngrok-skip-browser-warning": "1" } as const;
+
 /** Reads the enclave public key from the FCC ext-proxy `/info` endpoint. */
 export class ProxyEnclaveKeySource implements EnclaveKeySource {
+  private readonly fetchImpl: typeof fetch;
+
   constructor(
     private readonly proxyUrl: string,
-    private readonly fetchImpl: typeof fetch = fetch,
-  ) {}
+    fetchImpl?: typeof fetch,
+  ) {
+    /*
+     * Bind, don't just store. `fetch` is only callable with `window`/`globalThis` as its receiver, so
+     * holding it on the instance and calling `this.fetchImpl(...)` makes the receiver the instance and
+     * the browser throws "Failed to execute 'fetch' on 'Window': Illegal invocation". Node's fetch does
+     * not check, which is exactly why this survived: every CLI script worked and the browser's Publish
+     * button failed on its first call, every time.
+     */
+    this.fetchImpl = fetchImpl ?? ((...args) => globalThis.fetch(...args));
+  }
 
   async fetchPublicKey(): Promise<string> {
-    const res = await this.fetchImpl(`${this.proxyUrl.replace(/\/$/, "")}/info`);
+    const res = await this.fetchImpl(`${this.proxyUrl.replace(/\/$/, "")}/info`, {
+      headers: PROXY_FETCH_HEADERS,
+    });
     if (!res.ok) throw new Error(`proxy /info failed (${res.status})`);
     const info = (await res.json()) as ProxyInfo;
     const key = info.machineData?.publicKey;

@@ -176,8 +176,12 @@ export class Server {
       result.log = "pending";
     }
 
+    // Include the failure reason. It already leaves the enclave in `result.log`, so logging it here
+    // exposes nothing new — and without it a rejected signal is indistinguishable from a misrouted
+    // one, which is the single most expensive ambiguity when debugging this path.
     console.log(
-      `action ${action.data.id}: opType=${bytes32HexToString(df.opType)} opCommand=${bytes32HexToString(df.opCommand)} status=${status}`
+      `action ${action.data.id}: opType=${bytes32HexToString(df.opType)} opCommand=${bytes32HexToString(df.opCommand)} status=${status}` +
+        (status === 0 ? ` reason=${err ?? "unknown"}` : "")
     );
 
     return [200, result];

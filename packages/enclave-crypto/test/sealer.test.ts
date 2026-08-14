@@ -90,7 +90,38 @@ describe("EnclaveSignalSealer", () => {
       const key = await new ProxyEnclaveKeySource("https://proxy.example/", fetchImpl).fetchPublicKey();
 
       expect(key).toBe(enclavePub);
-      expect(fetchImpl).toHaveBeenCalledWith("https://proxy.example/info");
+      // The ngrok-skip header is load-bearing in the browser: without it the tunnel answers a
+      // browser-UA request with its HTML interstitial (status 200), and the key fetch dies in
+      // `res.json()`. See PROXY_FETCH_HEADERS.
+      expect(fetchImpl).toHaveBeenCalledWith("https://proxy.example/info", {
+        headers: { "ngrok-skip-browser-warning": "1" },
+      });
+    });
+
+    it("calls a default fetch that is bound to globalThis", async () => {
+      /*
+       * Regression test for "Failed to execute 'fetch' on 'Window': Illegal invocation" — the browser
+       * rejects `fetch` invoked with any receiver other than the global object, so storing the bare
+       * function on the instance broke every publish from the web app while Node's laxer fetch kept
+       * the CLI green. Asserting the receiver is what makes that difference visible here.
+       */
+      const original = globalThis.fetch;
+      let receiver: unknown = "unset";
+      globalThis.fetch = function (this: unknown) {
+        receiver = this;
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ machineData: { publicKey: enclavePub } }),
+        }) as unknown as Promise<Response>;
+      } as typeof fetch;
+
+      try {
+        await new ProxyEnclaveKeySource("https://proxy.example").fetchPublicKey();
+      } finally {
+        globalThis.fetch = original;
+      }
+
+      expect(receiver).toBe(globalThis);
     });
 
     // What a real tee-node actually serves: the affine coordinate pair, not an encoded key string.

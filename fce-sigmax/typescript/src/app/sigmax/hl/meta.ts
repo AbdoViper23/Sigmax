@@ -206,19 +206,27 @@ export function planSpotOrder(
 
   let sizeBase: number;
   if (pair.isBuy) {
-    const notionalUsd = unitsToNumber(amountInUnits); // quote (USDC) notional
-    if (notionalUsd < MIN_NOTIONAL_USD) throw new Error(`hyperliquid: order $${notionalUsd} below $10 minimum`);
-    sizeBase = notionalUsd / execPx; // for a limit buy, size against the cap so cost ≤ notional
+    sizeBase = unitsToNumber(amountInUnits) / execPx; // quote notional → base size
   } else {
     sizeBase = unitsToNumber(amountInUnits); // held base amount being sold
-    if (sizeBase * reference < MIN_NOTIONAL_USD) {
-      throw new Error(`hyperliquid: order ~$${sizeBase * reference} below $10 minimum`);
-    }
   }
 
   const price = roundPrice(execPx, pair.szDecimals);
   const size = roundSize(sizeBase, pair.szDecimals);
   if (Number(size) <= 0) throw new Error("hyperliquid: order size rounds to zero");
+
+  /*
+   * Check the minimum against the ROUNDED order, not the requested notional.
+   *
+   * `roundSize` floors to the asset's lot, and on a coarse lot that is a large step down: PURR has
+   * szDecimals 0, so a $12.90 buy at 4.67 becomes 2 whole PURR = $9.34. Validating before rounding
+   * passed that order and Hyperliquid then rejected it for being under its $10 minimum — which the
+   * executor reports as an ordinary skip, so it reads as "no trade" with no reason anywhere.
+   */
+  const orderedUsd = Number(size) * Number(price);
+  if (orderedUsd < MIN_NOTIONAL_USD) {
+    throw new Error(`hyperliquid: rounded order $${orderedUsd.toFixed(2)} below $${MIN_NOTIONAL_USD} minimum`);
+  }
   return { price, size, isLimit };
 }
 

@@ -82,8 +82,14 @@ export function decodeSignal(data: Hex): Signal {
     if (quoteToken.length === 0) throw new Error("quoteToken must not be empty");
   }
 
+  // Mirrors MAX_SIZE_BPS in @sigmax/shared (the enclave cannot import it — it builds standalone).
+  // An EXIT must be able to close the whole position; an ENTRY stays a bounded fraction.
+  const action = actionU8 === 0 ? "ENTRY" : "EXIT";
+  const maxSizeBps = action === "EXIT" ? 10_000 : 2000;
   const sizeBps = Number(d[8]);
-  if (sizeBps < 1 || sizeBps > 2000) throw new Error("sizeBps out of range (1..2000)");
+  if (sizeBps < 1 || sizeBps > maxSizeBps) {
+    throw new Error(`sizeBps out of range (1..${maxSizeBps} for ${action})`);
+  }
 
   const issuedAt = Number(d[12]);
   const expiresAt = Number(d[13]);

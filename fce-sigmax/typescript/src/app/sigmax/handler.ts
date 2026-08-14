@@ -24,6 +24,7 @@ import {
   readFtsoPrice,
   invertScaledPrice,
   resetSubscriberCache,
+  warmSubscriberCache,
   type SigmaxChainConfig,
 } from "./chain.js";
 import { decryptViaNode } from "../node.js";
@@ -62,6 +63,35 @@ function getDeps(): SigmaxDeps {
     };
   }
   return deps;
+}
+
+/**
+ * Keep the subscriber cache warm from boot, off the request path.
+ *
+ * tee-node POSTs an action and waits exactly 2 seconds (`ProxyTimeout`, hardcoded). A cold cache
+ * spends that budget scanning `Subscribed` history and the instruction gets dropped even though the
+ * authorization is signed correctly. Warming at boot and on an interval means the hot path only
+ * ever scans the last few minutes. Fire-and-forget: a failed sweep only means the next signal
+ * scans a bit more itself.
+ *
+ * Idempotent by design (double invocation just refreshes twice as often), NOT started at module
+ * import so tests never inherit a live timer.
+ */
+const WARM_INTERVAL_MS = 60_000;
+let warmerStarted = false;
+export function startSubscriberWarmer(): void {
+  if (warmerStarted) return;
+  warmerStarted = true;
+  const sweep = () => {
+    const d = getDeps();
+    warmSubscriberCache(d.client, d.config).catch((e) => {
+      console.log(`subscriber warmer: sweep failed (will retry): ${e instanceof Error ? e.message : e}`);
+    });
+  };
+  sweep();
+  const t = setInterval(sweep, WARM_INTERVAL_MS);
+  // Never keep the process alive just to warm a cache.
+  if (typeof t.unref === "function") t.unref();
 }
 
 /** The exchange transport, built on first Hyperliquid signal and reused after that. */
@@ -202,8 +232,19 @@ export async function handleSignalExecute(msg: string): Promise<[string | null, 
   try {
     const { value, decimals } = await readFtsoPrice(client, config);
     const { tokenIn, tokenOut, price } = resolveDirection(signal, value, decimals);
-    const { tokenInDecimals, tokenOutDecimals } = await readDecimals(client, tokenIn, tokenOut);
-    const followers = await readActiveFollowers(client, config, signal.strategyId, tokenIn);
+
+    /*
+     * Concurrently, because the budget here is 2 seconds and every await is a public-RPC round trip.
+     * tee-node calls this handler with a hardcoded `ProxyTimeout = 2 * time.Second` (its
+     * internal/settings) and drops the instruction when that expires — the handler still finishes and
+     * issues a valid authorization, but nothing is listening, so the trade silently never happens.
+     * Decimals and follower discovery share no data, so paying for them one after the other spent
+     * most of the budget on latency alone.
+     */
+    const [{ tokenInDecimals, tokenOutDecimals }, followers] = await Promise.all([
+      readDecimals(client, tokenIn, tokenOut),
+      readActiveFollowers(client, config, signal.strategyId, tokenIn),
+    ]);
 
     // Each vault enforces its own cap on-chain; size against the smallest so nothing reverts.
     const perTradeCap = followers.length

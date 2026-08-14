@@ -74,6 +74,12 @@ async function main(): Promise<void> {
   const account = privateKeyToAccount(env("DEPLOYMENT_PRIVATE_KEY") as Hex);
   const sender = env("FLARE_INSTRUCTION_SENDER") as Address;
   const proxyUrl = env("EXT_PROXY_URL").replace(/\/$/, "");
+  /*
+   * `/state` is served by the EXTENSION's own HTTP port, not the FCC proxy — the proxy answers it with
+   * a bare 404, which is indistinguishable from "the key never landed". Defaults to the extension port
+   * on localhost; override with EXT_STATE_URL when the enclave is not local.
+   */
+  const stateUrl = (process.env.EXT_STATE_URL ?? "http://localhost:7702").replace(/\/$/, "");
 
   const publicClient = createPublicClient({ chain: coston2, transport: http(RPC) });
   const walletClient = createWalletClient({ account, chain: coston2, transport: http(RPC) });
@@ -115,7 +121,7 @@ async function main(): Promise<void> {
   for (let attempt = 1; attempt <= 30; attempt++) {
     await new Promise((r) => setTimeout(r, 5_000));
     try {
-      const res = await fetch(`${proxyUrl}/state`);
+      const res = await fetch(`${stateUrl}/state`);
       if (!res.ok) continue;
       const state = (await res.json()) as { state?: { hasKey?: boolean; hlAgentMasterPubkey?: string } };
       if (state.state?.hasKey) {

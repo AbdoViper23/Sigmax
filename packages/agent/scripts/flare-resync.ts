@@ -60,9 +60,17 @@ const VAULT_ABI = parseAbi([
 const TEE_MANAGER = (process.env.FLARE_TEE_MANAGER ??
   "0x1a9C4A0f9D76c0b1D91d22E24E573a9b377618aE") as Address;
 
+/*
+ * `pause` is the one that retires a stale identity. It is NOT in `ITeeMachineRegistry` — that interface
+ * is view-only, which is why this looked unfixable at first. The deployed manager does have it; the real
+ * ABI lives in the Go module cache, under
+ * `go-flare-common@<version>/pkg/contracts/tee/machinemanager/machinemanager.abi`, and carries nine
+ * write functions, `pause(address)` among them. Callable by the machine's owner.
+ */
 const TEE_MANAGER_ABI = parseAbi([
   "function getActiveTeeMachines(uint256 extensionId) view returns (address[] teeIds, string[] urls)",
   "function getTeeMachineStatus(address teeId) view returns (uint8)",
+  "function pause(address teeId)",
 ]);
 
 /** ITeeMachineRegistry.TeeStatus. Only PRODUCTION (2) receives dispatched instructions. */
@@ -105,6 +113,12 @@ async function main(): Promise<void> {
   const factory = env("FLARE_VAULT_FACTORY") as Address;
 
   const publicClient = createPublicClient({ chain: coston2, transport: http(RPC) });
+  const account = process.env.DEPLOYMENT_PRIVATE_KEY
+    ? privateKeyToAccount(process.env.DEPLOYMENT_PRIVATE_KEY as Hex)
+    : undefined;
+  const walletClient = account
+    ? createWalletClient({ account, chain: coston2, transport: http(RPC) })
+    : undefined;
 
   console.log(`\n${apply ? "APPLYING FIXES" : "REPORT ONLY (set APPLY=1 to fix)"}\n`);
   console.log(`proxy    ${proxyUrl}`);
@@ -173,10 +187,37 @@ async function main(): Promise<void> {
           else warn(`machine ${line}  ← STALE (a dispatch routed here is never answered)`);
         }
 
-        if (teeIds.length > 1) {
+        /*
+         * Retire the stale identities. This is not a tidy-up: with two PRODUCTION machines registered,
+         * dispatch picks one at random and the retired one answers nothing — measured on Coston2, six
+         * consecutive publishes all routed to the dead machine. Pausing is what makes routing
+         * deterministic, so APPLY=1 does it rather than printing instructions nobody can follow (the
+         * scaffold ships no pause command).
+         */
+        const stale = teeIds.filter((id) => id.toLowerCase() !== liveTee.toLowerCase());
+        if (stale.length > 0) {
           bad(`${teeIds.length} machines are active for this extension — dispatch picks one at random`);
-          dim("Pause every identity except the running one. Old registrations do not expire on their own,");
-          dim("and each restart leaves another behind, so the odds of a silent failure only grow.");
+          if (!apply) {
+            warn(`run with APPLY=1 to pause ${stale.length} stale ${stale.length === 1 ? "identity" : "identities"}`);
+          } else if (!walletClient) {
+            bad("cannot pause: DEPLOYMENT_PRIVATE_KEY is not set");
+          } else {
+            for (const id of stale) {
+              try {
+                const hash = await walletClient.writeContract({
+                  address: TEE_MANAGER,
+                  abi: TEE_MANAGER_ABI,
+                  functionName: "pause",
+                  args: [id],
+                });
+                await publicClient.waitForTransactionReceipt({ hash });
+                ok(`paused stale machine ${id} (${hash})`);
+              } catch (e) {
+                bad(`could not pause ${id}: ${e instanceof Error ? e.message.split("\n")[0] : String(e)}`);
+                dim("Only the machine's owner can pause it — check DEPLOYMENT_PRIVATE_KEY.");
+              }
+            }
+          }
         }
         if (live.length === 0) {
           bad("the running enclave is NOT an active PRODUCTION machine — instructions will not arrive");
@@ -213,13 +254,6 @@ async function main(): Promise<void> {
   } catch {
     rotatable = false;
   }
-
-  const account = process.env.DEPLOYMENT_PRIVATE_KEY
-    ? privateKeyToAccount(process.env.DEPLOYMENT_PRIVATE_KEY as Hex)
-    : undefined;
-  const walletClient = account
-    ? createWalletClient({ account, chain: coston2, transport: http(RPC) })
-    : undefined;
 
   if (factoryTee.toLowerCase() === liveTee.toLowerCase()) {
     ok("factory already points at the live enclave");

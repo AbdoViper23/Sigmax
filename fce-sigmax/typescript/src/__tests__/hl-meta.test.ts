@@ -138,6 +138,37 @@ describe("planSpotOrder (market vs limit)", () => {
     // $10 notional at mid 1e6 -> size 1e-5, rounds to 0 at szDecimals 2
     expect(() => planSpotOrder(buy, 1_000_000, 100, numberToUnits(10), 0n)).toThrow(/rounds to zero/);
   });
+
+  /*
+   * The minimum has to be judged on the rounded order. Measured against live PURR/USDC (szDecimals 0,
+   * touch 4.6252): a $12.90 buy sizes to 2.76 PURR, floors to 2, and the order is worth $9.34 — which
+   * Hyperliquid rejects. Checking the requested notional instead let that order through, and the
+   * rejection surfaced only as a skipped follower with no reason recorded anywhere.
+   */
+  describe("coarse lot sizes (szDecimals 0)", () => {
+    const COARSE: SpotMeta = {
+      tokens: [
+        { name: "USDC", szDecimals: 2, weiDecimals: 8, index: 0 },
+        { name: "PURR", szDecimals: 0, weiDecimals: 5, index: 1 },
+      ],
+      universe: [{ name: "PURR/USDC", tokens: [1, 0], index: 0 }],
+    };
+    const coarseBuy = resolvePair(COARSE, "USDC", "PURR");
+
+    it("rejects a buy whose FLOORED size falls under the minimum", () => {
+      // $12.90 at 4.6252 +1% -> 2.76 PURR -> floors to 2 -> $9.34
+      expect(() => planSpotOrder(coarseBuy, 4.6252, 100, numberToUnits(12.9), 0n)).toThrow(
+        /rounded order \$9\.3\d below \$10/,
+      );
+    });
+
+    it("accepts a buy that still clears the minimum after flooring", () => {
+      // $15 at 4.6252 +1% -> 3.21 PURR -> floors to 3 -> $14.01
+      const plan = planSpotOrder(coarseBuy, 4.6252, 100, numberToUnits(15), 0n);
+      expect(plan.size).toBe("3");
+      expect(Number(plan.size) * Number(plan.price)).toBeGreaterThanOrEqual(10);
+    });
+  });
 });
 
 describe("assertSpotAsset (spot-only guard)", () => {

@@ -31,6 +31,25 @@ const U8_TO_VENUE = ["arbitrum", "hyperliquid", "flare"] as const;
  * `token`/`quoteToken` are venue-dependent (see superRefine): on arbitrum they are EVM addresses;
  * on hyperliquid they are spot coin SYMBOLS (e.g. "HYPE" / "USDC"), resolved live against spotMeta.
  */
+/**
+ * Largest `sizeBps` a signal may carry, per action.
+ *
+ * An ENTRY is a bounded fraction of the follower's balance — that bound is the risk control, and 20%
+ * is deliberate. An EXIT is not sizing a new position, it is closing one, so it has to be able to
+ * reach all of it: capped at 20% the leader could never express "close it", and on venues with a
+ * minimum order value the remainder was unsellable anyway (Hyperliquid rejects spot orders under $10,
+ * so 20% of a small position rounds down to nothing that can trade).
+ *
+ * `uint16` in the ABI tuple holds 10000 with room to spare, and the on-chain caps still bind
+ * regardless: `perTradeCap` on the vault for Flare, `SIGMAX_HL_PER_TRADE_CAP` for Hyperliquid.
+ */
+export const MAX_SIZE_BPS = { ENTRY: 2000, EXIT: 10_000 } as const;
+
+/** The `sizeBps` ceiling for an action. Keep every validator using this — they must not diverge. */
+export function maxSizeBps(action: "ENTRY" | "EXIT"): number {
+  return MAX_SIZE_BPS[action];
+}
+
 export const SignalSchema = z
   .object({
     version: z.number().int().min(1).max(65535).default(1),
@@ -41,7 +60,7 @@ export const SignalSchema = z
     action: SignalAction,
     token: z.string().min(1), // target: buy on ENTRY, sell on EXIT (address on arbitrum, symbol on HL)
     quoteToken: z.string().min(1), // explicit reference token (address on arbitrum, symbol on HL)
-    sizeBps: z.number().int().min(1).max(2000).default(500), // % of vault balance, in basis points (max 20%)
+    sizeBps: z.number().int().min(1).max(MAX_SIZE_BPS.EXIT).default(500), // see maxSizeBps()
     maxEntryPrice: uintStr.default("0"), // "0" = none
     takeProfitPrice: uintStr.default("0"), // "0" = none
     stopLossPrice: uintStr.default("0"), // "0" = none
@@ -49,6 +68,13 @@ export const SignalSchema = z
     expiresAt: z.number().int().nonnegative(),
   })
   .superRefine((s, ctx) => {
+    if (s.sizeBps > maxSizeBps(s.action)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["sizeBps"],
+        message: `sizeBps must be ≤ ${maxSizeBps(s.action)} for ${s.action}`,
+      });
+    }
     // arbitrum + flare execute ERC-20 swaps → token/quoteToken MUST be EVM addresses. Hyperliquid trades
     // spot markets by coin symbol → any non-empty symbol (validated live against spotMeta in the agent).
     if (s.venue === "arbitrum" || s.venue === "flare") {

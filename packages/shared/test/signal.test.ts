@@ -36,6 +36,29 @@ const hlBase: Signal = SignalSchema.parse({
   expiresAt: 1748686400,
 });
 
+describe("sizeBps ceiling by action", () => {
+  const withSize = (action: "ENTRY" | "EXIT", sizeBps: number) =>
+    SignalSchema.safeParse({ ...base, action, sizeBps });
+
+  it("caps an ENTRY at 20%", () => {
+    expect(withSize("ENTRY", 2000).success).toBe(true);
+    expect(withSize("ENTRY", 2001).success).toBe(false);
+  });
+
+  // An exit closes a position, so it has to be able to reach all of it — capped at 20% a leader
+  // could not express "close it", and the remainder was often too small for a venue's minimum
+  // order value to ever sell.
+  it("lets an EXIT close the whole position", () => {
+    expect(withSize("EXIT", 10_000).success).toBe(true);
+    expect(withSize("EXIT", 10_001).success).toBe(false);
+  });
+
+  it("survives the ABI round trip at 100%", () => {
+    const full = SignalSchema.parse({ ...base, action: "EXIT", sizeBps: 10_000 });
+    expect(decodeSignal(encodeSignal(full)).sizeBps).toBe(10_000);
+  });
+});
+
 describe("signal encode/decode", () => {
   it("round-trips to an identical signal", () => {
     const decoded = decodeSignal(encodeSignal(base));

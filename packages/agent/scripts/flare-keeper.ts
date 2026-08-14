@@ -26,8 +26,11 @@
 import {
   createPublicClient,
   createWalletClient,
+  fallback,
   defineChain,
   http,
+  pad,
+  toHex,
   type Address,
   type Hex,
 } from "viem";
@@ -35,6 +38,24 @@ import { privateKeyToAccount } from "viem/accounts";
 import { relayActionResult, type TeeActionResult } from "../src/flare/keeper.js";
 
 const RPC = process.env.FLARE_RPC_URL ?? "https://coston2-api.flare.network/ext/C/rpc";
+
+/**
+ * The keeper polls forever, and every public Coston2 endpoint fails some of the time — measured in one
+ * night: Enosys started timing out `eth_blockNumber` continuously, Ankr answered a burst then began
+ * returning `fetch failed`, thirdweb drops concurrent requests. A single endpoint therefore stalls
+ * instruction discovery, and a missed instruction is a trade that silently never happens.
+ *
+ * viem's `fallback` moves to the next transport on error, so the daemon survives any one of them being
+ * unhappy. FLARE_RPC_URL stays first when set — it is the deliberate choice; the rest are backup.
+ */
+const RPC_FALLBACKS = [
+  RPC,
+  "https://coston2-api.flare.network/ext/C/rpc",
+  "https://rpc.ankr.com/flare_coston2",
+  "https://coston2.enosys.global/ext/C/rpc",
+].filter((url, i, all) => all.indexOf(url) === i);
+
+const transport = () => fallback(RPC_FALLBACKS.map((url) => http(url, { timeout: 15_000 })));
 
 const coston2 = defineChain({
   id: 114,
@@ -56,6 +77,8 @@ const TEE_MANAGER = (process.env.FLARE_TEE_MANAGER ??
  */
 const LOG_WINDOW = 30n;
 const POLL_MS = Number(process.env.POLL_MS ?? "6000");
+/** How far behind the frontier every pass re-scans (~4 min of Coston2 blocks — see the loop). */
+const REWIND = 120n;
 
 interface RawResponse {
   result?: { id?: string; submissionTag?: string; status: number; log?: string; data?: string };
@@ -73,7 +96,18 @@ function env(name: string): string {
  * yet filed (404), and throws only when the enclave has terminally rejected the signal.
  */
 async function tryFetchResult(proxyUrl: string, instructionId: Hex): Promise<TeeActionResult | null> {
-  const res = await fetch(`${proxyUrl}/action/result/${instructionId}`);
+  let res: Response;
+  try {
+    res = await fetch(`${proxyUrl}/action/result/${instructionId}`);
+  } catch {
+    /*
+     * A dropped connection says nothing about the signal. Published through a tunnel this poll fails
+     * intermittently, and treating that as an answer made the keeper abandon signals the enclave had
+     * already authorized — it logged "rejected: fetch failed" for a trade that was ready to relay.
+     * Not reachable is not the same as rejected: keep polling until the deadline decides.
+     */
+    return null;
+  }
   if (!res.ok) return null; // 404 = not processed yet
 
   const body = (await res.json()) as RawResponse;
@@ -96,15 +130,25 @@ async function tryFetchResult(proxyUrl: string, instructionId: Hex): Promise<Tee
 async function main(): Promise<void> {
   const proxyUrl = env("EXT_PROXY_URL").replace(/\/$/, "");
   const account = privateKeyToAccount(env("DEPLOYMENT_PRIVATE_KEY") as Hex);
-  const extensionId = process.env.FLARE_EXTENSION_ID?.toLowerCase();
+  /*
+   * `extensionId` is compared against topic[1], which is a 32-byte word — so the env value has to be
+   * encoded as one. It used to be `FLARE_EXTENSION_ID.toLowerCase()`, i.e. the decimal string "66127"
+   * compared against "0x00…01024f". That never matches, so the filter dropped EVERY instruction and
+   * the keeper sat silently at "watching from block N" while signals went unrelayed — no error, no
+   * relay, nothing to see. Accepts decimal or hex.
+   */
+  const rawExtensionId = process.env.FLARE_EXTENSION_ID?.trim();
+  const extensionId = rawExtensionId
+    ? pad(toHex(BigInt(rawExtensionId)), { size: 32 }).toLowerCase()
+    : undefined;
 
-  const publicClient = createPublicClient({ chain: coston2, transport: http(RPC) });
-  const walletClient = createWalletClient({ account, chain: coston2, transport: http(RPC) });
+  const publicClient = createPublicClient({ chain: coston2, transport: transport() });
+  const walletClient = createWalletClient({ account, chain: coston2, transport: transport() });
 
   console.log(`keeper     ${account.address}`);
   console.log(`proxy      ${proxyUrl}`);
   console.log(`manager    ${TEE_MANAGER}`);
-  console.log(`extension  ${extensionId ?? "(any)"}\n`);
+  console.log(`extension  ${rawExtensionId ?? "(any)"}${extensionId ? ` (${extensionId})` : ""}\n`);
 
   // Start at the head: a keeper relays live signals, and an authorization old enough to have been
   // missed has passed its deadline anyway, so back-filling would only spend gas on certain reverts.
@@ -120,12 +164,22 @@ async function main(): Promise<void> {
     try {
       const head = await publicClient.getBlockNumber();
 
-      // 1. Discover new instructions routed to our extension.
-      while (cursor < head) {
-        const to = cursor + LOG_WINDOW > head ? head : cursor + LOG_WINDOW;
+      /*
+       * 1. Discover new instructions routed to our extension — re-scanning a rewind window each
+       * pass instead of only the frontier. With a fallback transport, `eth_blockNumber` and
+       * `eth_getLogs` can be answered by different providers, and a provider whose log index lags
+       * its head returns `[]` for blocks it has but hasn't indexed. Advancing the cursor on that
+       * empty answer skips the instruction forever — measured live: a publish confirmed in block
+       * 34048737 with the dispatch event present, and the keeper never saw it. Re-seeing a block is
+       * free (`pending`/`done` already dedupe), so the cursor only marks the frontier and every
+       * pass re-reads the last REWIND blocks behind it.
+       */
+      let scanFrom = cursor > REWIND ? cursor - REWIND : 0n;
+      while (scanFrom < head) {
+        const to = scanFrom + LOG_WINDOW > head ? head : scanFrom + LOG_WINDOW;
         const logs = await publicClient.getLogs({
           address: TEE_MANAGER,
-          fromBlock: cursor + 1n,
+          fromBlock: scanFrom + 1n,
           toBlock: to,
         });
         for (const log of logs) {
@@ -137,8 +191,9 @@ async function main(): Promise<void> {
           pending.set(instructionId, Date.now());
           console.log(`[${new Date().toISOString()}] saw instruction ${instructionId}`);
         }
-        cursor = to;
+        scanFrom = to;
       }
+      cursor = head;
 
       // 2. Poll each pending instruction and relay the moment it succeeds.
       for (const [instructionId, firstSeen] of [...pending]) {

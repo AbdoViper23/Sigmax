@@ -32,7 +32,7 @@ import {
   type Hex,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { EnclaveSignalSealer, ProxyEnclaveKeySource } from "@sigmax/enclave-crypto";
+import { EnclaveSignalSealer, ProxyEnclaveKeySource, normalizePublicKey } from "@sigmax/enclave-crypto";
 import type { Signal } from "@sigmax/shared";
 import { relayActionResult, type TeeActionResult } from "../src/flare/keeper.js";
 
@@ -216,7 +216,17 @@ async function main() {
   // Each restart leaves another dead registration behind, so the odds decay; 20 attempts keeps the
   // demo reliable even with several stale machines. The production fix is for the sender to request
   // getRandomTeeIds(extensionId, n) and fan the instruction out to every machine.
-  const liveTee = process.env.LIVE_TEE_ID?.toLowerCase().replace(/^0x/, "");
+  /*
+   * Derive the live identity from the key the proxy is publishing right now. It used to come from
+   * `LIVE_TEE_ID` in .env, and that is wrong by construction: a simulated TEE mints a new identity on
+   * every restart, so the pinned value goes stale the first time the stack comes back up — and then
+   * EVERY dispatch compares unequal and is reported as a misroute. That is what produced the
+   * "six consecutive publishes all routed to the retired machine" reading; the routing was fine, the
+   * yardstick was dead. `LIVE_TEE_ID` stays honoured as an explicit override.
+   */
+  const liveTee = (process.env.LIVE_TEE_ID ?? (await deriveLiveTeeId(proxyUrl)))
+    ?.toLowerCase()
+    .replace(/^0x/, "");
   const publishOnce = async () => {
     for (let attempt = 1; attempt <= 20; attempt++) {
       const receipt = await send(
@@ -279,6 +289,17 @@ async function main() {
 const TEE_INSTRUCTIONS_SENT_TOPIC = "0xf770e69a9fc05b7180797556ec4cedb6108ce2c56ffa76c84aa087efeb5e6963";
 
 /** The event payload carries the routed teeIds; look for the live one rather than ABI-decoding. */
+/** The address the running enclave's published key resolves to — what a dispatch is compared against. */
+async function deriveLiveTeeId(proxyUrl: string): Promise<string | undefined> {
+  try {
+    const uncompressed = normalizePublicKey(await new ProxyEnclaveKeySource(proxyUrl).fetchPublicKey());
+    const body = uncompressed.length === 65 ? uncompressed.slice(1) : uncompressed;
+    return `0x${keccak256(body).slice(-40)}`;
+  } catch {
+    return undefined; // unreadable → publish once and take whatever routing we get
+  }
+}
+
 function routedToLiveMachine(logs: readonly { topics: readonly Hex[]; data: Hex }[], liveTee: string): boolean {
   for (const log of logs) {
     if (log.topics[0]?.toLowerCase() === TEE_INSTRUCTIONS_SENT_TOPIC) {

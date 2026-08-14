@@ -72,6 +72,22 @@ services:
       - SIGMAX_ROUTER=${SIGMAX_ROUTER:-}
       - SIGMAX_SUBS_FROM_BLOCK=${SIGMAX_SUBS_FROM_BLOCK:-}
       - SIGMAX_SLIPPAGE_BPS=${SIGMAX_SLIPPAGE_BPS:-}
+      # eth_getLogs window for the subscriber scan. Defaults to 30 (the official Coston2 RPC's cap);
+      # a provider that allows more means far fewer requests, which is what keeps the scan off 429s.
+      - SIGMAX_LOG_WINDOW=${SIGMAX_LOG_WINDOW:-}
+      # --- Hyperliquid venue ---
+      # The cap defaults to 0, which disables the venue, so these MUST be forwarded or a
+      # Hyperliquid signal is rejected inside the enclave no matter what .env says. The
+      # enclave reads them once at boot: changing them needs a container restart, which
+      # mints a new TEE identity (see docs/flare/RUNBOOK.md §0a).
+      - SIGMAX_HL_PER_TRADE_CAP=${SIGMAX_HL_PER_TRADE_CAP:-}
+      - SIGMAX_HL_TESTNET=${SIGMAX_HL_TESTNET:-}
+      - SIGMAX_HL_MAX_DEVIATION_BPS=${SIGMAX_HL_MAX_DEVIATION_BPS:-}
+    # The extension's own HTTP server. `/state` (which reports whether the Hyperliquid agent key is
+    # loaded) lives here, NOT on the FCC proxy — the proxy 404s it. Published so the web app's dev
+    # proxy and the agent scripts can read it.
+    ports:
+      - "${EXTENSION_STATE_BIND:-127.0.0.1:7702}:7702"
     depends_on:
       - ext-proxy
 

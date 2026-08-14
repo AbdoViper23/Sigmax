@@ -132,11 +132,90 @@ export interface FollowerContext extends FollowerBalance {
 const subscriberCache = new Map<string, { scannedTo: bigint; subscribers: Set<`0x${string}`> }>();
 
 /**
+ * Highest block the background warmer has swept for the whole registry (all strategies at once).
+ * A strategy with no cache entry of its own can safely start its scan here instead of at the
+ * configured floor: the warmer's unfiltered sweep would have seen any Subscribed event it had.
+ */
+let warmedTo: bigint | null = null;
+
+/**
  * Drop the cache. Wired into `resetSigmaxState()` so each test starts from a clean scan — otherwise
  * one test's subscriber set leaks into the next and the tests stop testing what they claim to.
  */
 export function resetSubscriberCache(): void {
   subscriberCache.clear();
+  decimalsCache.clear();
+  warmedTo = null;
+}
+
+/**
+ * Sweep `Subscribed` events for EVERY strategy and pre-fill the per-strategy caches.
+ *
+ * WHY THIS EXISTS: tee-node gives the /action handler a hardcoded 2 seconds (`ProxyTimeout`), and the
+ * first signal after a restart used to spend that budget cold-scanning history — the authorization
+ * was signed correctly and arrived after nobody was listening, so the trade silently never happened.
+ * Run at boot and on an interval, this moves the scan out of the request path entirely: by the time
+ * a signal arrives, its strategy's cache resumes from a block minutes old at worst.
+ *
+ * Failure here is deliberately non-fatal — the hot path falls back to scanning on its own exactly as
+ * before, so a warmer outage degrades latency, never correctness.
+ */
+export async function warmSubscriberCache(client: PublicClient, cfg: SigmaxChainConfig): Promise<void> {
+  if (!cfg.subscriptionRegistry) return;
+  const head = await client.getBlockNumber();
+  let from = warmedTo !== null ? warmedTo + 1n : (cfg.subsFromBlock ?? 0n);
+  if (head < from) return;
+
+  /*
+   * Sequential small batches, and progress is committed after every one. Public endpoints
+   * rate-limit bursts (Ankr answers ~20 concurrent getLogs then starts refusing), and the first
+   * sweep can span tens of thousands of blocks — an all-or-nothing sweep that dies at 90% would
+   * restart from zero forever and the cache would never warm. Committing per batch means each
+   * attempt only ever pays for the blocks nobody has swept yet.
+   *
+   * Committing per batch is sound because batches run in ORDER: when a batch [a..b] completes,
+   * every event in [floor..b] for every strategy is in the sets, so b is a true floor for the
+   * uncached-strategy path and a true `scannedTo` for every cached one.
+   */
+  const window = cfg.logWindow;
+  const BATCH = 5;
+  const PAUSE_MS = 250;
+  while (from <= head) {
+    const ranges: { fromBlock: bigint; toBlock: bigint }[] = [];
+    for (let i = 0; i < BATCH && from <= head; i++) {
+      const end = from + window - 1n;
+      ranges.push({ fromBlock: from, toBlock: end > head ? head : end });
+      from = end + 1n;
+    }
+
+    const batches = await Promise.all(
+      ranges.map((r) =>
+        client.getLogs({
+          address: cfg.subscriptionRegistry!,
+          event: SUBSCRIBED_EVENT,
+          fromBlock: r.fromBlock,
+          toBlock: r.toBlock,
+        }),
+      ),
+    );
+    for (const logs of batches) {
+      for (const l of logs) {
+        if (!l.args.strategyId || !l.args.subscriber) continue;
+        const key = `${cfg.subscriptionRegistry}:${l.args.strategyId}`.toLowerCase();
+        const entry = subscriberCache.get(key) ?? { scannedTo: 0n, subscribers: new Set() };
+        entry.subscribers.add(l.args.subscriber);
+        subscriberCache.set(key, entry);
+      }
+    }
+
+    const sweptTo = ranges[ranges.length - 1]!.toBlock;
+    for (const entry of subscriberCache.values()) {
+      if (entry.scannedTo < sweptTo) entry.scannedTo = sweptTo;
+    }
+    warmedTo = sweptTo;
+
+    if (from <= head) await new Promise((r) => setTimeout(r, PAUSE_MS));
+  }
 }
 
 async function readSubscribers(
@@ -148,8 +227,13 @@ async function readSubscribers(
   const cacheKey = `${cfg.subscriptionRegistry}:${strategyId}`.toLowerCase();
   const cached = subscriberCache.get(cacheKey);
 
-  // Resume from just after the last scan; otherwise start at the configured floor.
-  const from = cached ? cached.scannedTo + 1n : (cfg.subsFromBlock ?? 0n);
+  // Resume from just after the last scan; else from the warmer's registry-wide floor (its
+  // unfiltered sweep saw every strategy's events); else from the configured floor.
+  const from = cached
+    ? cached.scannedTo + 1n
+    : warmedTo !== null
+      ? warmedTo + 1n
+      : (cfg.subsFromBlock ?? 0n);
   if (head < from) return cached ? [...cached.subscribers] : [];
 
   const window = cfg.logWindow;
@@ -200,17 +284,18 @@ export async function readActiveSubscribers(
 
   const subscribers = await readSubscribers(client, cfg, strategyId);
 
-  const active: `0x${string}`[] = [];
-  for (const subscriber of subscribers) {
-    const isActive = await client.readContract({
-      address: cfg.subscriptionRegistry,
-      abi: REGISTRY_ABI,
-      functionName: "isActive",
-      args: [subscriber, strategyId],
-    });
-    if (isActive) active.push(subscriber);
-  }
-  return active;
+  // One round trip for all of them, not one each: this runs inside tee-node's 2s handler budget.
+  const flags = await Promise.all(
+    subscribers.map((subscriber) =>
+      client.readContract({
+        address: cfg.subscriptionRegistry!,
+        abi: REGISTRY_ABI,
+        functionName: "isActive",
+        args: [subscriber, strategyId],
+      }),
+    ),
+  );
+  return subscribers.filter((_, i) => flags[i]);
 }
 
 /**
@@ -227,35 +312,52 @@ export async function readActiveFollowers(
 
   const subscribers = await readActiveSubscribers(client, cfg, strategyId);
 
-  const followers: FollowerContext[] = [];
-  for (const subscriber of subscribers) {
-    const vault = await client.readContract({
-      address: cfg.vaultFactory,
-      abi: FACTORY_ABI,
-      functionName: "vaultOf",
-      args: [subscriber],
-    });
-    if (vault === "0x0000000000000000000000000000000000000000") continue;
+  // Same reason as readActiveSubscribers: fan the per-follower reads out instead of walking them.
+  const vaults = await Promise.all(
+    subscribers.map((subscriber) =>
+      client.readContract({
+        address: cfg.vaultFactory!,
+        abi: FACTORY_ABI,
+        functionName: "vaultOf",
+        args: [subscriber],
+      }),
+    ),
+  );
 
-    const [balance, perTradeCap] = await Promise.all([
-      client.readContract({ address: tokenIn, abi: ERC20_ABI, functionName: "balanceOf", args: [vault] }),
-      client.readContract({ address: vault, abi: VAULT_ABI, functionName: "perTradeCap" }),
-    ]);
-    followers.push({ vault, balance, perTradeCap });
-  }
-  return followers;
+  const withVault = vaults.filter((v) => v !== "0x0000000000000000000000000000000000000000");
+  const contexts = await Promise.all(
+    withVault.map(async (vault) => {
+      const [balance, perTradeCap] = await Promise.all([
+        client.readContract({ address: tokenIn, abi: ERC20_ABI, functionName: "balanceOf", args: [vault] }),
+        client.readContract({ address: vault, abi: VAULT_ABI, functionName: "perTradeCap" }),
+      ]);
+      return { vault, balance, perTradeCap };
+    }),
+  );
+  return contexts;
 }
 
-/** ERC-20 decimals for both legs of the swap. */
+/**
+ * ERC-20 `decimals` is immutable in practice, and this runs inside tee-node's 2-second action
+ * budget where every avoided round trip counts — so cache it for the process lifetime. Memory-only,
+ * public data, cleared by restart like everything else here.
+ */
+const decimalsCache = new Map<string, number>();
+
+/** ERC-20 decimals for both legs of the swap (cached after the first read). */
 export async function readDecimals(
   client: PublicClient,
   tokenIn: `0x${string}`,
   tokenOut: `0x${string}`,
 ): Promise<{ tokenInDecimals: number; tokenOutDecimals: number }> {
-  const [tokenInDecimals, tokenOutDecimals] = await Promise.all([
-    client.readContract({ address: tokenIn, abi: ERC20_ABI, functionName: "decimals" }),
-    client.readContract({ address: tokenOut, abi: ERC20_ABI, functionName: "decimals" }),
-  ]);
+  const one = async (token: `0x${string}`): Promise<number> => {
+    const hit = decimalsCache.get(token.toLowerCase());
+    if (hit !== undefined) return hit;
+    const d = await client.readContract({ address: token, abi: ERC20_ABI, functionName: "decimals" });
+    decimalsCache.set(token.toLowerCase(), d);
+    return d;
+  };
+  const [tokenInDecimals, tokenOutDecimals] = await Promise.all([one(tokenIn), one(tokenOut)]);
   return { tokenInDecimals, tokenOutDecimals };
 }
 
