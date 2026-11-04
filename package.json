@@ -2,7 +2,7 @@
   "name": "sigmax",
   "private": true,
   "version": "0.0.0",
-  "description": "Sigmax — confidential spot-only copy-trading (Story CDR + Arbitrum)",
+  "description": "SigmaX — confidential copy-trading. We are rewriting this app into Stellar (applying for the Stellar Community Fund).",
   "packageManager": "pnpm@11.0.8",
   "scripts": {
     "build": "turbo run build",

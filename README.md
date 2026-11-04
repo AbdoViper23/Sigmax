@@ -5,7 +5,9 @@
   <img src="brand/sigmax-mark.svg" alt="Sigmax" height="72">
 </picture>
 
-### Confidential copy-trading on Flare
+### Confidential copy-trading — we are rewriting SigmaX onto Stellar
+
+> **🚀 We are rewriting this app into Stellar.** SigmaX is being rebuilt on Stellar and we are applying for the Stellar Community Fund grant. The Flare code below is the previous prototype and stays as reference while the Stellar rewrite proceeds. See [`SIGMAX_PLAN.md`](SIGMAX_PLAN.md).
 
 **Leaders publish encrypted trading signals. Followers copy the trades automatically.**
 **The strategy never leaks — the track record stays verifiable on-chain.**
@@ -494,7 +496,7 @@ cd fce-sigmax/typescript && npm test    # enclave (104)
 
 <div align="center">
 
-Built for the **Flare Summer Signal** hackathon.
+**We are rewriting SigmaX into Stellar** — applying for the Stellar Community Fund. Prototype originally built for the Flare Summer Signal hackathon.
 
 **MIT** · [runbook](docs/flare/RUNBOOK.md) · [design docs](docs/flare/) · [submission](docs/flare/submission.md) · [findings log](docs/flare/reference/phase-0-findings.md)
 
