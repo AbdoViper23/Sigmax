@@ -1,3 +1,36 @@
+## Sigmax on Stellar (SCF #46)
+
+Sigmax is a confidential copy-trading platform. A leader's trade signal stays encrypted from their
+browser to a secure enclave, and every follower's trade executes from the follower's own account, inside
+limits the follower sets, so the strategy never leaks and the track record stays verifiable on-chain.
+Sigmax is being rebuilt on Stellar, with Soroban smart-account vaults, Aquarius execution and Circle
+USDC. The Story and Flare code in this repo are earlier prototypes, kept as history.
+
+**Status:** pre-launch. No Stellar code is deployed yet: no contracts, no Testnet deployment, no users.
+
+**Roadmap (SCF #46 Build Award application)**
+
+| Tranche | Target date | What ships |
+| --- | --- | --- |
+| 1. MVP on Testnet | 20/01/2027 | Vault smart account with policy `__check_auth`, Signal Registry with entry and leader close signals, Aquarius swap execution with a Reflector oracle bound on `min_amount_out`, enclave service in software mode, web app with Varial (formerly Freighter) |
+| 2. Testnet release | 05/03/2027 | Hardware-attested enclave + Enclave Registry, private take-profit / stop-loss executed by the enclave, leader public record, Subscription contract with fee split, Stellar Wallets Kit, threat model and monitoring plan, 50-vault load test, SDEX spike report |
+| 3. Mainnet launch | 20/04/2027 | Mainnet contracts with guarded caps, production web app, live monitoring and alerting, developer docs and TypeScript SDK |
+
+**Scope:** spot swaps only. Out of scope for this award: leverage, lending, derivatives and other chains.
+
+**Docs:**
+
+- [Architecture](docs/stellar/ARCHITECTURE.md): vaults, signal lifecycle, venues, enclave, storage and rent, governance, security model, milestones
+- [Integrations](docs/stellar/integrations.md): every Stellar integration, what it is for, and its tranche
+- [Architecture decision records](docs/stellar/adr/): starting with [ADR 0001: smart-account vaults and Aquarius first](docs/stellar/adr/0001-smart-account-vaults-and-aquarius-first.md)
+
+**AI disclosure:** Parts of the documentation and code were written with AI assistance (Claude) and reviewed by the team.
+
+> Everything below this point describes the **Flare prototype** (Flare Summer Signal hackathon, August
+> 2026) and is kept as history. None of it runs on Stellar.
+
+---
+
 <div align="center">
 
 <picture>
@@ -278,8 +311,8 @@ build — the Flare path does not import them, and the web app does not depend o
 
 ```bash
 pnpm install
-pnpm -r test                          # 128 TypeScript tests
-cd fce-sigmax/typescript && npm test  # 102 extension tests (standalone npm project)
+pnpm -r test                          # 115 TypeScript tests
+cd fce-sigmax/typescript && npm test  # 104 extension tests (standalone npm project)
 cd packages/contracts && forge test   # 74 contract tests (needs its own foundry.toml)
 ```
 
