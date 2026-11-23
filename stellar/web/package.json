@@ -1,0 +1,27 @@
+{
+  "name": "@sigmax/stellar-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Sigmax on Stellar web app (Tranche 1, Testnet): leaders seal and commit signals, followers run their vaults.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@sigmax/stellar-client": "workspace:*",
+    "@stellar/freighter-api": "6.0.1",
+    "@stellar/stellar-sdk": "17.4.0",
+    "buffer": "^6.0.3",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^5.0.4",
+    "vite": "^7.3.1"
+  }
+}

@@ -1,0 +1,6 @@
+packages:
+  - "client"
+  - "agent"
+  - "web"
+allowBuilds:
+  esbuild: true

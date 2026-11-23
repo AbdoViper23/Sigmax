@@ -2,9 +2,11 @@
 
 Every Stellar integration Sigmax plans to use, what it is for, and the tranche in which it lands.
 
-> **Status: planned work.** None of these integrations is built or deployed yet. There is no Stellar
-> code in this repo and no Testnet deployment. Tranche dates and scope follow
-> [ARCHITECTURE.md](ARCHITECTURE.md#milestones-and-open-source).
+> **Status (2026-11-19):** the Tranche 1 integrations run on Testnet: Soroban vaults and Signal
+> Registry, Aquarius pool swaps, Circle Testnet USDC, Reflector (Testnet CEX/DEX feed), Stellar RPC and
+> Varial (formerly Freighter) through `@stellar/freighter-api`. See [`stellar/`](../../stellar/README.md)
+> and [decisions.md](decisions.md). The Tranche 2 and Tranche 3 rows are still planned. Tranche dates
+> and scope follow [ARCHITECTURE.md](ARCHITECTURE.md#milestones-and-open-source).
 
 **Tranche key:** Tranche 1 = MVP on Testnet (20/01/2027) · Tranche 2 = Testnet release (05/03/2027) ·
 Tranche 3 = Mainnet launch (20/04/2027) · Spike = time-boxed feasibility study with a written report,

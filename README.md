@@ -6,7 +6,10 @@ limits the follower sets, so the strategy never leaks and the track record stays
 Sigmax is being rebuilt on Stellar, with Soroban smart-account vaults, Aquarius execution and Circle
 USDC. The Story and Flare code in this repo are earlier prototypes, kept as history.
 
-**Status:** pre-launch. No Stellar code is deployed yet: no contracts, no Testnet deployment, no users.
+**Status:** Tranche 1 MVP running on Stellar Testnet. The Soroban vaults, Signal Registry, Enclave
+Registry, vault factory, a software-mode enclave, the relayer and a web app are live there and have
+executed enclave-authorized swaps on Aquarius ([`stellar/`](stellar/README.md)). Hardware attestation,
+the public leader record and Mainnet are still ahead. No users yet.
 
 **Roadmap (SCF #46 Build Award application)**
 
@@ -23,6 +26,8 @@ USDC. The Story and Flare code in this repo are earlier prototypes, kept as hist
 - [Architecture](docs/stellar/ARCHITECTURE.md): vaults, signal lifecycle, venues, enclave, storage and rent, governance, security model, milestones
 - [Integrations](docs/stellar/integrations.md): every Stellar integration, what it is for, and its tranche
 - [Architecture decision records](docs/stellar/adr/): starting with [ADR 0001: smart-account vaults and Aquarius first](docs/stellar/adr/0001-smart-account-vaults-and-aquarius-first.md)
+- [Stellar build](stellar/README.md): contracts, enclave, relayer, web app, Testnet addresses and how to run them
+- [Tranche 1 build decisions](docs/stellar/decisions.md): where the build refined the architecture, and why
 
 **AI disclosure:** Parts of the documentation and code were written with AI assistance (Claude) and reviewed by the team.
 
@@ -40,7 +45,7 @@ USDC. The Story and Flare code in this repo are earlier prototypes, kept as hist
 
 ### Confidential copy-trading — we are rewriting SigmaX onto Stellar
 
-> **🚀 We are rewriting this app into Stellar.** SigmaX is being rebuilt on Stellar and we are applying for the Stellar Community Fund grant. The Flare code below is the previous prototype and stays as reference while the Stellar rewrite proceeds. See [`SIGMAX_PLAN.md`](SIGMAX_PLAN.md).
+> **🚀 We are rewriting this app into Stellar.** SigmaX is being rebuilt on Stellar and we are applying for the Stellar Community Fund grant. The Flare code below is the previous prototype and stays as reference while the Stellar rewrite proceeds. See [Sigmax on Stellar](#sigmax-on-stellar-scf-46) and [`stellar/`](stellar/README.md).
 
 **Leaders publish encrypted trading signals. Followers copy the trades automatically.**
 **The strategy never leaks — the track record stays verifiable on-chain.**

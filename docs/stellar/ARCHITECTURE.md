@@ -2,13 +2,17 @@
 
 Abdelrahman Ahmed · November 2026 · SCF #46 Build Award submission
 
-> **Status: planned work.** Nothing in this document is deployed on Stellar yet. There is no Stellar
-> code in this repo, no Testnet deployment and no users. Everything below describes what the SCF #46
-> award will build. The Story and Flare code elsewhere in this repo are earlier prototypes, kept as
-> history (see [Prototype history](#prototype-history-and-what-carries-over)).
+> **Status: Tranche 1 MVP running on Testnet (2026-11-19).** The follower vault, the Signal Registry, the
+> Enclave Registry (in its Tranche 1 form), the vault factory, the software-mode enclave, the relayer and
+> the web app are in [`stellar/`](../../stellar/README.md), deployed on Testnet, and have executed
+> enclave-authorized entry and close swaps on Aquarius. Hardware attestation, the leader public record,
+> the Subscription contract and Mainnet are still planned work. Where the build refined this design,
+> [decisions.md](decisions.md) records how and why. The Story and Flare code elsewhere in this repo are
+> earlier prototypes, kept as history (see [Prototype history](#prototype-history-and-what-carries-over)).
 
 Related: [Stellar integrations](integrations.md) ·
-[ADR 0001: smart-account vaults and Aquarius first](adr/0001-smart-account-vaults-and-aquarius-first.md)
+[ADR 0001: smart-account vaults and Aquarius first](adr/0001-smart-account-vaults-and-aquarius-first.md) ·
+[Tranche 1 build decisions](decisions.md)
 
 ## Overview
 
@@ -88,9 +92,11 @@ SwapIntent {
 4. The signal commitment exists in the Signal Registry, so every trade ties to a signal published before execution.
 5. The authorization contexts match the intent exactly. The vault walks the full context tree (vault → router or pool → token `transfer`) and rejects any context that is not the expected swap call with the expected arguments. A signed intent cannot be reused to authorize a transfer to any other address.
 
+*Tranche 1 build:* the enclave signs `SIGMAX/swap/v1 ‖ payload ‖ signal ‖ expires_at_ledger`, where `payload` is the Soroban authorization payload. The payload already commits to the network, the nonce and the invocation tree, so the vault reads vault, venue, assets and amounts from the authorization contexts rather than from copies in the signature. The nonce is Soroban's own address-credential nonce, which the host stores as a temporary entry until the signature expires. The vault also allows only one trade per signal ([decisions.md](decisions.md), D2 and D3).
+
 `min_amount_out` is passed to the pool call (the `out_min` argument of the Aquarius `swap` function), so the swap reverts on-chain if the price moved past the follower's slippage limit. Withdrawals, policy changes and signer changes require the owner signature only. The enclave key can never move funds out of the vault except through an approved swap, and swap output always returns to the vault.
 
-We will build on the [OpenZeppelin Stellar smart-account and policy contracts](https://docs.openzeppelin.com/stellar-contracts/accounts/smart-account) where they fit, rather than writing auth from scratch. Their model (signers, context rules, policies) maps onto the two signers above. The swap check itself will be a Sigmax policy that reads the call arguments of each context, because a threshold policy that does not inspect the context would grant the enclave key every function of an allowlisted contract. We will pin an audited release of the library and track its security advisories.
+We will build on the [OpenZeppelin Stellar smart-account and policy contracts](https://docs.openzeppelin.com/stellar-contracts/accounts/smart-account) where they fit, rather than writing auth from scratch. Their model (signers, context rules, policies) maps onto the two signers above. The swap check itself will be a Sigmax policy that reads the call arguments of each context, because a threshold policy that does not inspect the context would grant the enclave key every function of an allowlisted contract. We will pin an audited release of the library and track its security advisories. *Tranche 1 build:* the OZ contracts did not fit (one external signer, a custom argument check, and OZ 0.8 pins an older soroban-sdk), so the vault's `__check_auth` is purpose-built; owners act through `require_auth`, which also covers passkey wallets ([decisions.md](decisions.md), D1).
 
 ## Signal lifecycle
 
@@ -140,7 +146,7 @@ The enclave is the one place a signal is readable, so its integrity is the produ
 
 **Keys survive restarts.** The Flare prototype's simulated enclave minted a fresh signing key on every start, so after each restart every vault rejected its signatures until the new key was registered again. With a 48-hour timelock on key changes, that would stop trading for two days after every restart. In Tranche 2 the enclave keys will be sealed with attestation-gated key release (Cloud KMS releases the sealed key only to the measured image), so a restart keeps the same key. A new key is registered only when the image changes, as a deliberate, timelocked rotation.
 
-**Enclave Registry contract (Soroban).** It will store the current enclave signing key and the attested image digest. Key rotation needs a 2-of-3 admin multisig and a timelock of at least 48 hours, and emits an event. Vaults read the registry in `__check_auth`, so a rotated or revoked key stops working for every vault at once. Mainnet launch requires a hardware-attested key. Software-mode keys are never registered on Mainnet. Who holds the admin keys is set out in [Governance](#governance).
+**Enclave Registry contract (Soroban).** *Tranche 1 build:* a minimal registry is already deployed (single admin, immediate changes, signing and encryption keys), so vaults bind to its final read interface now ([decisions.md](decisions.md), D5). It will store the current enclave signing key and the attested image digest. Key rotation needs a 2-of-3 admin multisig and a timelock of at least 48 hours, and emits an event. Vaults read the registry in `__check_auth`, so a rotated or revoked key stops working for every vault at once. Mainnet launch requires a hardware-attested key. Software-mode keys are never registered on Mainnet. Who holds the admin keys is set out in [Governance](#governance).
 
 **Availability.** If the enclave is down, no new trades happen, but no funds are at risk. Owners can always withdraw with their own signature.
 

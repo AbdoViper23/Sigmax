@@ -1,0 +1,43 @@
+{
+  "network": "testnet",
+  "rpcUrl": "https://soroban-testnet.stellar.org",
+  "networkPassphrase": "Test SDF Network ; September 2015",
+  "deployedAt": "2026-11-19T04:48:46Z",
+  "admin": "GBHR6NSBSR36O5ZT3QEE42YY5I26KIV24KEQJAIU75OYAO6BAKRSN5QO",
+  "contracts": {
+    "signalRegistry": "CBLKYPDVZ67CXU75VLYSY2HW6HDUZVPURYKL67ZLHZ56WXQOO2SURG3C",
+    "enclaveRegistry": "CCC5OO4PVX4ITYYBOS472JYRVPLEI5COQWAAE4XULQXBSDUF3KL7ZPBG",
+    "vaultFactory": "CACFUIWXK7ZE7LUMASMVO3YN4WQTO5E4ASYACRPL4QAOMDWWSGQOR6GJ"
+  },
+  "wasm": {
+    "signalRegistry": "6ba2caf99405c05093e87c6a659b91ee6f41671f13539cdf022a3fc02c582ffe",
+    "enclaveRegistry": "0c55b4c652669368e110ed0cee63077307081a8f305ddb10986eabde4fa9a99b",
+    "vault": "c2ed553134ce9c31d82145c20a9df1fff45c1825cc3b19586bbd55e86debaa84",
+    "vaultFactory": "bc72efa6fa0c5eb9f5b9c9a99793eadadd4b0a594986bafbad4209697dda9f2e"
+  },
+  "oracle": "CCYOZJCOPG34LLQQ7N24YXBM7LL62R7ONMZ3G6WZAAYPB5OYKOMJRN63",
+  "assets": {
+    "USDC": {
+      "token": "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA",
+      "code": "USDC",
+      "issuer": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+      "decimals": 7
+    },
+    "XLM": {
+      "token": "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC",
+      "code": "native",
+      "decimals": 7
+    }
+  },
+  "venues": [
+    {
+      "dex": "aquarius",
+      "pool": "CDVB6O3WX24AAZ77SQRN52ABU4ECB66N36FG5BFVPTV54DPG3V6MOTOD",
+      "tokens": [
+        "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA",
+        "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC"
+      ],
+      "feeBps": 100
+    }
+  ]
+}

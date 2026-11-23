@@ -1,0 +1,31 @@
+{
+  "name": "sigmax-stellar",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Sigmax on Stellar: TypeScript client, relayer agent and web app (Tranche 1 MVP, Testnet).",
+  "type": "module",
+  "packageManager": "pnpm@11.0.8",
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "align-pool": "tsx scripts/align-pool.ts",
+    "demo": "tsx scripts/demo-e2e.ts",
+    "agent": "pnpm --filter @sigmax/stellar-agent start",
+    "smoke:web": "tsx scripts/smoke-web.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "playwright-core": "1.62.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@sigmax/stellar-client": "workspace:*",
+    "@stellar/stellar-sdk": "17.4.0"
+  }
+}

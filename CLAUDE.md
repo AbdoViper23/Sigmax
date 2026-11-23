@@ -6,6 +6,25 @@
 
 ---
 
+## 0. Current direction: Stellar (read this first)
+
+Sigmax is being rebuilt on Stellar (SCF #46). The live code for that is in `stellar/`:
+
+- `stellar/README.md`: what is built, Testnet addresses, how to build, test and run it.
+- `docs/stellar/ARCHITECTURE.md` (design), `docs/stellar/decisions.md` (Tranche 1 build decisions),
+  `docs/stellar/integrations.md`, `docs/stellar/adr/`.
+- Commands: `cd stellar/contracts && stellar contract build && cargo test` (soroban-sdk 29 must be built
+  with stellar-cli); `cd stellar/enclave && cargo test`; `cd stellar && pnpm test`. `stellar/` is its own
+  pnpm workspace.
+
+Sections 1 to 7 below describe the Story/Arbitrum-era design and its tooling (viem, `@piplabs/cdr-sdk`),
+which the Stellar build does not use. Hard rules 1 to 3 (spot-only, non-custodial, confidentiality)
+apply to the Stellar build unchanged. Hard rule 4 (Story plus a liquidity chain) predates the move to
+Stellar, where custody, policy, execution and the record all live on one chain. It is left as written
+for the founder to update.
+
+---
+
 ## 1. What Sigmax is (one paragraph)
 
 Sigmax is a **confidential, spot-only copy-trading platform**. A *leader* (trader) encrypts a

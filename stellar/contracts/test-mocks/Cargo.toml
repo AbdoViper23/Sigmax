@@ -1,0 +1,18 @@
+[package]
+name = "sigmax-test-mocks"
+description = "Test-only contracts: an Aquarius-compatible pool and a SEP-40 price oracle."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+# rlib only: these contracts are registered natively in tests and are never
+# built to Wasm (two contracts in one Wasm would clash on exported names).
+[lib]
+crate-type = ["rlib"]
+doctest = false
+
+[dependencies]
+soroban-sdk = { workspace = true }
+sigmax-types = { workspace = true }

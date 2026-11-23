@@ -1,0 +1,16 @@
+{
+  "name": "@sigmax/stellar-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Sigmax relay and relayer: holds sealed signals, asks the enclave to authorize each vault's swap, submits and pays fees.",
+  "scripts": {
+    "start": "tsx src/main.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@sigmax/stellar-client": "workspace:*",
+    "@stellar/stellar-sdk": "17.4.0"
+  }
+}
